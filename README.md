@@ -31,6 +31,8 @@
 
 ## Agent 工作流图
 
+查看 Agent 输出样例：[docs/agent_outputs.md](docs/agent_outputs.md)
+
 ```mermaid
 flowchart TD
     A[用户上传简历或粘贴简历文本] --> B[输入岗位 JD]
