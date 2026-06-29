@@ -145,6 +145,23 @@ def dedupe_keep_order(items: Iterable[str]) -> List[str]:
     return result
 
 
+def dedupe_keyword_groups(*groups: Iterable[str]) -> List[List[str]]:
+    """Dedupe keyword groups while preserving first-seen order across groups."""
+
+    seen = set()
+    result: List[List[str]] = []
+    for group in groups:
+        unique_group: List[str] = []
+        for item in group:
+            value = str(item).strip()
+            key = value.lower()
+            if value and key not in seen:
+                seen.add(key)
+                unique_group.append(value)
+        result.append(unique_group)
+    return result
+
+
 def contains_any(text: str, keywords: Sequence[str]) -> bool:
     lower_text = text.lower()
     return any(keyword.lower() in lower_text for keyword in keywords if keyword)

@@ -26,6 +26,14 @@ def test_workflow_runs_in_mock_mode() -> None:
     assert result.evidence_matches
     assert 0 <= result.score.total_score <= 100
     assert "AI 秋招岗位匹配报告" in result.final_report.markdown
+    all_keywords = (
+        result.keyword_coverage.covered_keywords
+        + result.keyword_coverage.weak_keywords
+        + result.keyword_coverage.missing_keywords
+    )
+    assert len(all_keywords) == len({keyword.lower() for keyword in all_keywords})
+    assert len(result.score.strengths) == len(set(result.score.strengths))
+    assert len(result.score.risks) == len(set(result.score.risks))
 
 
 def test_docx_export_returns_word_file() -> None:

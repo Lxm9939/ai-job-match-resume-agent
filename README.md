@@ -1,6 +1,11 @@
 # AI 秋招岗位匹配与简历优化助手
 
-基于 Streamlit 和多 Agent 工作流的求职辅助工具。用户可以上传简历或粘贴简历文本，再粘贴岗位 JD，系统会自动生成岗位匹配分析、简历优化建议、关键词覆盖结果、可解释评分和多渠道投递话术，并支持 Markdown / Word 报告导出。
+[![Test](https://github.com/Lxm9939/ai-job-match-resume-agent/actions/workflows/test.yml/badge.svg)](https://github.com/Lxm9939/ai-job-match-resume-agent/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+一个基于 **Streamlit + 多 Agent 工作流** 的秋招求职辅助项目。它不是简单的“LLM 简历改写器”，而是把 JD 解析、简历证据抽取、关键词覆盖、可解释评分、简历优化建议和投递话术生成拆成多个可追踪的 Agent 节点，帮助候选人更系统地完成岗位适配分析。
+
+用户可以上传简历或粘贴简历文本，再粘贴岗位 JD。系统会输出结构化匹配分析、简历优化建议、多渠道投递话术，并支持 Markdown / Word 报告导出。没有 API Key 时也可以使用 mock 模式本地演示。
 
 ## 项目背景
 
@@ -60,9 +65,11 @@ flowchart TD
 
 ```text
 ai-job-match-resume-agent/
+├── .github/workflows/test.yml
 ├── app.py
 ├── README.md
 ├── AGENTS.md
+├── LICENSE
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
@@ -73,19 +80,10 @@ ai-job-match-resume-agent/
 │   ├── report_exporter.py
 │   ├── workflow.py
 │   ├── agents/
-│   │   ├── jd_parser_agent.py
-│   │   ├── resume_parser_agent.py
-│   │   ├── evidence_agent.py
-│   │   ├── keyword_agent.py
-│   │   ├── scoring_agent.py
-│   │   ├── resume_optimizer_agent.py
-│   │   ├── outreach_agent.py
-│   │   └── report_agent.py
 │   ├── schemas/
-│   │   └── models.py
 │   └── utils/
-│       └── text_utils.py
 ├── docs/
+│   ├── deliverables/
 │   ├── project_plan.md
 │   ├── workflow.md
 │   ├── test_cases.md
@@ -100,7 +98,7 @@ ai-job-match-resume-agent/
 ## 快速开始
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Lxm9939/ai-job-match-resume-agent.git
 cd ai-job-match-resume-agent
 pip install -r requirements.txt
 streamlit run app.py
@@ -137,6 +135,13 @@ APP_DEBUG=false
 - `auto`：有 `OPENAI_API_KEY` 时使用 OpenAI，否则回退 mock。
 - `openai`：优先使用 OpenAI，调用失败时回退 mock 结果。
 
+## Limitations / 项目局限性
+
+- Mock 模式是本地规则和关键词库驱动，适合演示产品流程，但不等同于真实 LLM 的语义理解能力。
+- 匹配评分是可解释的启发式评分，用于定位优势和短板，不应被当作真实招聘结果或录用概率。
+- 简历优化建议遵循“不编造经历”的原则；用户需要自行确认所有项目、工具、指标和结果都真实发生过。
+- 上传或粘贴真实简历前，应注意隐私保护；如果使用 OpenAI 模式，请确认自己接受相应 API 的数据处理方式。
+
 ## 测试说明
 
 ```bash
@@ -148,11 +153,15 @@ pytest
 - mock 模式端到端 Agent 工作流。
 - `.docx` Word 报告导出是否生成有效 Word 文件。
 
-## 后续迭代计划
+GitHub Actions 会在 `push` 和 `pull_request` 时自动运行 pytest。
 
-- 批量 JD 匹配排序。
-- 岗位关键词库和行业/方向专属评分策略。
-- 多版本简历对比与优化记录。
-- 更严格 JSON Schema 校验、LLM 重试与输出修复。
-- UI 自动化测试和截图回归测试。
-- 在线部署到 Streamlit Community Cloud、Hugging Face Spaces 或其他平台。
+## Future Work / 后续迭代
+
+- 在线部署：部署到 Streamlit Community Cloud、Hugging Face Spaces 或其他平台。
+- 批量 JD 匹配：一次输入多个 JD，输出岗位匹配排序。
+- 多版本简历对比：比较不同简历版本在同一 JD 下的匹配差异。
+- 岗位关键词库：为 AI 产品、数据分析、商业分析、数据产品等方向维护专属关键词库和评分策略。
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

@@ -15,7 +15,7 @@ from src.schemas.models import (
     ResumeAnalysis,
     ScoreBreakdown,
 )
-from src.utils.text_utils import markdown_table
+from src.utils.text_utils import dedupe_keep_order, markdown_table
 
 
 class ReportAgent:
@@ -38,7 +38,10 @@ class ReportAgent:
             jd, resume, evidence_matches, keyword_coverage, score, optimization_suggestions, outreach
         )
         data = self.llm.complete_json(
-            system_prompt="你是最终报告 Agent。请输出 JSON：{'markdown':'完整 Markdown 报告'}。",
+            system_prompt=(
+                "你是最终报告 Agent。请输出 JSON：{'markdown':'完整 Markdown 报告'}。"
+                "报告中的关键词列表必须去重，并保持原有顺序。"
+            ),
             user_prompt=(
                 f"JD：{jd.model_dump()}\n\n简历：{resume.model_dump()}\n\n"
                 f"证据：{[item.model_dump() for item in evidence_matches]}\n\n"
@@ -70,6 +73,15 @@ class ReportAgent:
         optimize_rows = [
             [item.original_bullet, item.optimized_bullet, item.rationale] for item in optimization_suggestions[:8]
         ]
+        hard_skills = dedupe_keep_order(jd.hard_skills)
+        tools = dedupe_keep_order(jd.tools)
+        business_keywords = dedupe_keep_order(jd.business_keywords)
+        implicit_capabilities = dedupe_keep_order(jd.implicit_capabilities)
+        resume_skills = dedupe_keep_order(resume.skills)[:12]
+        transferable_capabilities = dedupe_keep_order(resume.transferable_capabilities)
+        covered_keywords = dedupe_keep_order(keyword_coverage.covered_keywords)
+        weak_keywords = dedupe_keep_order(keyword_coverage.weak_keywords)
+        missing_keywords = dedupe_keep_order(keyword_coverage.missing_keywords)
         return "\n\n".join(
             [
                 "# AI 秋招岗位匹配报告",
@@ -77,19 +89,19 @@ class ReportAgent:
                 "## 2. JD 解析\n"
                 f"- 公司：{jd.company or '未识别'}\n"
                 f"- 地点：{jd.location or '未识别'}\n"
-                f"- 硬技能：{', '.join(jd.hard_skills) or '未明显提及'}\n"
-                f"- 工具栈：{', '.join(jd.tools) or '未明显提及'}\n"
-                f"- 业务关键词：{', '.join(jd.business_keywords) or '未明显提及'}\n"
-                f"- 隐含能力：{', '.join(jd.implicit_capabilities) or '未明显提及'}",
+                f"- 硬技能：{', '.join(hard_skills) or '未明显提及'}\n"
+                f"- 工具栈：{', '.join(tools) or '未明显提及'}\n"
+                f"- 业务关键词：{', '.join(business_keywords) or '未明显提及'}\n"
+                f"- 隐含能力：{', '.join(implicit_capabilities) or '未明显提及'}",
                 "## 3. 简历概览\n"
                 f"- 教育背景：{'; '.join(resume.education[:3]) or '未识别'}\n"
-                f"- 技能栈：{', '.join(resume.skills[:12]) or '未识别'}\n"
-                f"- 可迁移能力：{', '.join(resume.transferable_capabilities) or '未识别'}",
+                f"- 技能栈：{', '.join(resume_skills) or '未识别'}\n"
+                f"- 可迁移能力：{', '.join(transferable_capabilities) or '未识别'}",
                 "## 4. 证据匹配\n" + markdown_table(["岗位要求", "简历证据", "强度", "建议"], evidence_rows),
                 "## 5. 关键词覆盖\n"
-                f"- 已覆盖：{', '.join(keyword_coverage.covered_keywords) or '无'}\n"
-                f"- 弱覆盖：{', '.join(keyword_coverage.weak_keywords) or '无'}\n"
-                f"- 未覆盖：{', '.join(keyword_coverage.missing_keywords) or '无'}",
+                f"- 已覆盖：{', '.join(covered_keywords) or '无'}\n"
+                f"- 弱覆盖：{', '.join(weak_keywords) or '无'}\n"
+                f"- 未覆盖：{', '.join(missing_keywords) or '无'}",
                 "## 6. 评分明细\n" + markdown_table(["维度", "权重", "得分", "原因"], score_rows),
                 "## 7. 简历优化建议\n"
                 + markdown_table(["修改前", "修改后", "理由"], optimize_rows),
@@ -101,4 +113,3 @@ class ReportAgent:
                 f"### 面试自我介绍\n{outreach.interview_intro}",
             ]
         )
-

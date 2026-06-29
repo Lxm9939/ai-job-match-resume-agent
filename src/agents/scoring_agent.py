@@ -6,7 +6,7 @@ from typing import List
 
 from src.llm_client import LLMClient
 from src.schemas.models import EvidenceMatch, JDAnalysis, KeywordCoverage, ResumeAnalysis, ScoreBreakdown, ScoreItem
-from src.utils.text_utils import safe_ratio
+from src.utils.text_utils import dedupe_keep_order, safe_ratio
 
 
 class ScoringAgent:
@@ -43,7 +43,7 @@ class ScoringAgent:
             ),
             fallback=fallback.model_dump(),
         )
-        return ScoreBreakdown(**data)
+        return self._normalize_score(ScoreBreakdown(**data))
 
     def _heuristic_score(
         self,
@@ -52,7 +52,7 @@ class ScoringAgent:
         evidence_matches: List[EvidenceMatch],
         keyword_coverage: KeywordCoverage,
     ) -> ScoreBreakdown:
-        skill_terms = jd.hard_skills + jd.tools
+        skill_terms = dedupe_keep_order(jd.hard_skills + jd.tools)
         covered_skills = [
             term for term in skill_terms if term.lower() in " ".join(resume.skills + resume.keywords).lower()
         ]
@@ -129,10 +129,21 @@ class ScoringAgent:
 
     def _strengths(self, coverage: KeywordCoverage, evidence_matches: List[EvidenceMatch]) -> List[str]:
         strong_evidence = [item.requirement for item in evidence_matches if item.strength == "强"][:5]
-        return (coverage.covered_keywords[:5] + strong_evidence)[:8]
+        return dedupe_keep_order(coverage.covered_keywords[:5] + strong_evidence)[:8]
 
     def _risks(self, coverage: KeywordCoverage, evidence_matches: List[EvidenceMatch]) -> List[str]:
         missing = coverage.missing_keywords[:5]
         weak_evidence = [item.requirement for item in evidence_matches if item.strength in {"弱", "缺失"}][:5]
-        return (missing + weak_evidence)[:8]
+        return dedupe_keep_order(missing + weak_evidence)[:8]
 
+    def _normalize_score(self, score: ScoreBreakdown) -> ScoreBreakdown:
+        strengths = dedupe_keep_order(score.strengths)
+        strength_keys = {item.lower() for item in strengths}
+        risks = dedupe_keep_order(item for item in score.risks if item.lower() not in strength_keys)
+        return ScoreBreakdown(
+            total_score=score.total_score,
+            categories=score.categories,
+            strengths=strengths,
+            risks=risks,
+            summary=score.summary,
+        )

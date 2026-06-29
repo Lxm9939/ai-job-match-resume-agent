@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from src.llm_client import LLMClient
 from src.schemas.models import JDAnalysis, KeywordCoverage, ResumeAnalysis
-from src.utils.text_utils import dedupe_keep_order, extract_keywords, safe_ratio
+from src.utils.text_utils import dedupe_keep_order, dedupe_keyword_groups, extract_keywords, safe_ratio
 
 
 SYNONYMS = {
@@ -34,7 +34,7 @@ class KeywordAgent:
             user_prompt=f"JD：{jd.model_dump()}\n\n简历：{resume.model_dump()}",
             fallback=fallback.model_dump(),
         )
-        return KeywordCoverage(**data)
+        return self._normalize_coverage(KeywordCoverage(**data))
 
     def _heuristic_coverage(self, jd: JDAnalysis, resume: ResumeAnalysis) -> KeywordCoverage:
         jd_keywords = dedupe_keep_order(
@@ -58,9 +58,10 @@ class KeywordAgent:
                 weak.append(keyword)
             else:
                 missing.append(keyword)
-        coverage_rate = safe_ratio(len(covered), len(jd_keywords))
+        covered, weak, missing = dedupe_keyword_groups(covered, weak, missing)
+        coverage_rate = safe_ratio(len(covered), len(covered) + len(weak) + len(missing))
         notes = (
-            f"JD 关键词共 {len(jd_keywords)} 个；强覆盖 {len(covered)} 个，"
+            f"JD 关键词共 {len(covered) + len(weak) + len(missing)} 个；强覆盖 {len(covered)} 个，"
             f"弱覆盖 {len(weak)} 个，未覆盖 {len(missing)} 个。"
         )
         return KeywordCoverage(
@@ -77,3 +78,22 @@ class KeywordAgent:
                 return True
         return False
 
+    def _normalize_coverage(self, coverage: KeywordCoverage) -> KeywordCoverage:
+        covered, weak, missing = dedupe_keyword_groups(
+            coverage.covered_keywords,
+            coverage.weak_keywords,
+            coverage.missing_keywords,
+        )
+        total = len(covered) + len(weak) + len(missing)
+        return KeywordCoverage(
+            covered_keywords=covered,
+            weak_keywords=weak,
+            missing_keywords=missing,
+            coverage_rate=round(safe_ratio(len(covered), total), 2) if total else coverage.coverage_rate,
+            notes=(
+                f"JD 关键词共 {total} 个；强覆盖 {len(covered)} 个，"
+                f"弱覆盖 {len(weak)} 个，未覆盖 {len(missing)} 个。"
+            )
+            if total
+            else coverage.notes,
+        )
