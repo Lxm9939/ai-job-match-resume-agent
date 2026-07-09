@@ -12,26 +12,49 @@ class OutreachAgent:
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm = llm_client
 
-    def run(self, jd: JDAnalysis, resume: ResumeAnalysis, score: ScoreBreakdown, target_role: str) -> OutreachMessages:
-        fallback = self._heuristic_messages(jd, resume, score, target_role)
+    def run(
+        self,
+        jd: JDAnalysis,
+        resume: ResumeAnalysis,
+        score: ScoreBreakdown,
+        target_role: str,
+        candidate_type: str = "",
+    ) -> OutreachMessages:
+        fallback = self._heuristic_messages(
+            jd,
+            resume,
+            score,
+            target_role,
+            candidate_type,
+        )
         data = self.llm.complete_json(
             system_prompt=(
                 "你是求职投递话术 Agent。请输出 JSON，字段为 boss_zhipin, "
                 "email_body, linkedin_dm, referral_request, interview_intro。"
                 "表达真诚具体，不夸大经历。"
             ),
-            user_prompt=f"JD：{jd.model_dump()}\n\n简历：{resume.model_dump()}\n\n评分：{score.model_dump()}",
+            user_prompt=(
+                f"求职阶段：{candidate_type or '未指定'}\n\n"
+                f"JD：{jd.model_dump()}\n\n简历：{resume.model_dump()}\n\n"
+                f"评分：{score.model_dump()}"
+            ),
             fallback=fallback.model_dump(),
         )
         return OutreachMessages(**data)
 
     def _heuristic_messages(
-        self, jd: JDAnalysis, resume: ResumeAnalysis, score: ScoreBreakdown, target_role: str
+        self,
+        jd: JDAnalysis,
+        resume: ResumeAnalysis,
+        score: ScoreBreakdown,
+        target_role: str,
+        candidate_type: str,
     ) -> OutreachMessages:
         role = jd.job_title or target_role or "目标岗位"
         company = jd.company or "贵公司"
         highlights = "、".join((score.strengths or resume.skills or ["数据分析", "项目经历"])[:3])
         missing = "、".join(score.risks[:2]) if score.risks else "岗位细节"
+        stage = f"我目前处于{candidate_type}求职阶段。" if candidate_type else ""
         return OutreachMessages(
             boss_zhipin=(
                 f"您好，我正在关注{role}机会。我的经历与{highlights}相关，"
@@ -52,9 +75,8 @@ class OutreachAgent:
                 "如果您方便的话，想请您帮忙评估是否适合内推；我会附上 JD、简历和简要匹配说明。"
             ),
             interview_intro=(
-                f"您好，我关注的是{role}方向。我的经历主要集中在{highlights}，"
+                f"您好，我关注的是{role}方向。{stage}我的经历主要集中在{highlights}，"
                 "做项目时比较重视从业务问题出发，拆解指标或需求，再通过数据/产品方法推动落地。"
                 f"这次岗位里我最想进一步发挥的是与{jd.business_keywords[:2] or ['业务目标']}相关的能力。"
             ),
         )
-

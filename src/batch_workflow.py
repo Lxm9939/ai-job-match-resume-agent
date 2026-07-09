@@ -43,6 +43,7 @@ class BatchMatchWorkflow:
             resume,
             jobs,
             target_role=preferences.target_role,
+            candidate_type=preferences.candidate_type,
         )
         ranked_jobs = [self._add_preference_context(item, preferences) for item in ranked_jobs]
         resume_summary = self._resume_summary(resume)
@@ -138,6 +139,7 @@ class BatchMatchWorkflow:
 
     def _preference_summary(self, preferences: JobPreferences) -> str:
         entries = [
+            f"求职阶段：{preferences.candidate_type or '未限定'}",
             f"目标方向：{preferences.target_role or '未限定'}",
             f"目标城市：{preferences.target_city or '未限定'}",
             f"岗位类型：{preferences.job_type or '未限定'}",

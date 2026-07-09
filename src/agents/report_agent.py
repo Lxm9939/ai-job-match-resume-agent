@@ -84,7 +84,7 @@ class ReportAgent:
         missing_keywords = dedupe_keep_order(keyword_coverage.missing_keywords)
         return "\n\n".join(
             [
-                "# AI 秋招岗位匹配报告",
+                "# AI 岗位匹配与求职优化报告",
                 f"## 1. 结论\n当前岗位：**{jd.job_title or '未识别'}**；匹配分：**{score.total_score}/100**。\n\n{score.summary}",
                 "## 2. JD 解析\n"
                 f"- 公司：{jd.company or '未识别'}\n"

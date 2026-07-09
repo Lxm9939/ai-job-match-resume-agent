@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-这是一个 Streamlit MVP：AI 秋招岗位匹配与简历优化助手。后续 Codex 开发应优先保持项目可运行、结构清晰、无 API Key 泄漏。
+这是一个 Streamlit + 多 Agent 求职辅助项目：AI 岗位搜索、匹配评分与求职优化助手。后续 Codex 开发应优先保持项目可运行、结构清晰、无 API Key 泄漏。
 
 ## 开发规范
 
@@ -42,4 +42,3 @@ APP_DEBUG=false
 - `mock`：默认本地规则模式，无需 API Key。
 - `openai`：强制使用 OpenAI API；无 Key 时自动回退 mock。
 - `auto`：有 Key 使用 OpenAI，无 Key 使用 mock。
-

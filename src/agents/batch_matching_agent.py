@@ -40,8 +40,12 @@ class BatchMatchingAgent:
         resume: ResumeAnalysis,
         jobs: List[JobPosting],
         target_role: str = "",
+        candidate_type: str = "",
     ) -> List[JobMatchResult]:
-        results = [self._match_one(resume, job, target_role) for job in jobs]
+        results = [
+            self._match_one(resume, job, target_role, candidate_type)
+            for job in jobs
+        ]
         return sorted(results, key=lambda item: item.total_score, reverse=True)
 
     def _match_one(
@@ -49,6 +53,7 @@ class BatchMatchingAgent:
         resume: ResumeAnalysis,
         job: JobPosting,
         target_role: str,
+        candidate_type: str,
     ) -> JobMatchResult:
         jd = self.jd_parser.run(job.jd_text, target_role=job.job_title or target_role)
         jd = jd.model_copy(
@@ -62,7 +67,13 @@ class BatchMatchingAgent:
         keyword_coverage = self.keyword_agent.run(jd, resume)
         score = self.scoring_agent.run(jd, resume, evidence, keyword_coverage)
         optimization = self.resume_optimizer.run(jd, resume)
-        outreach = self.outreach_agent.run(jd, resume, score, target_role=target_role)
+        outreach = self.outreach_agent.run(
+            jd,
+            resume,
+            score,
+            target_role=target_role,
+            candidate_type=candidate_type,
+        )
         interview = self.interview_agent.run(jd, resume, evidence, score)
 
         category_scores = {

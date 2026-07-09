@@ -21,7 +21,7 @@ def export_workflow_result_to_docx(result: WorkflowResult) -> bytes:
     document = Document()
     _configure_document(document)
 
-    title = document.add_heading("AI 秋招岗位匹配与简历优化报告", level=0)
+    title = document.add_heading("AI 岗位匹配评分与求职优化报告", level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     _add_job_summary(document, result)

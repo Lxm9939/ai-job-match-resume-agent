@@ -24,10 +24,54 @@ from src.workflow import ResumeMatchWorkflow
 
 
 st.set_page_config(
-    page_title="AI 秋招岗位匹配与简历优化助手",
+    page_title="AI 岗位搜索、匹配评分与求职优化助手",
     page_icon=":material/description:",
     layout="wide",
 )
+
+CANDIDATE_TYPE_OPTIONS = [
+    "实习",
+    "校招 / 应届",
+    "社招",
+    "转行",
+    "在职跳槽",
+    "海外留学生回国求职",
+    "其他",
+]
+TARGET_ROLE_OPTIONS = [
+    "AI 产品经理",
+    "AI Agent 产品",
+    "数据分析师",
+    "商业分析师",
+    "BI 分析师",
+    "数据产品经理",
+    "NLP / LLM 应用",
+    "软件开发 / 测试",
+    "其他",
+]
+JOB_TYPE_OPTIONS = [
+    "实习",
+    "可转正实习",
+    "校招",
+    "全职",
+    "远程",
+    "合同制",
+    "兼职",
+    "其他",
+]
+LOCATION_OPTIONS = [
+    "北京",
+    "上海",
+    "杭州",
+    "深圳",
+    "成都",
+    "广州",
+    "苏州",
+    "南京",
+    "远程",
+    "海外",
+    "其他",
+]
 
 
 def as_dict(item: Any) -> Dict[str, Any]:
@@ -75,6 +119,51 @@ def split_preference_values(value: str) -> List[str]:
         for item in re.split(r"[,，、/|]+", value)
         if item.strip()
     ]
+
+
+def select_single_preference(
+    label: str,
+    options: List[str],
+    key: str,
+    default: str,
+) -> str:
+    selected = st.selectbox(
+        label,
+        options,
+        index=options.index(default),
+        key=key,
+    )
+    if selected != "其他":
+        return selected
+    custom = st.text_input(
+        f"自定义{label}",
+        key=f"{key}_other",
+        placeholder="请输入自定义内容",
+    )
+    return custom.strip() or "其他"
+
+
+def select_multiple_preferences(
+    label: str,
+    options: List[str],
+    key: str,
+    default: Optional[List[str]] = None,
+) -> List[str]:
+    selected = st.multiselect(
+        label,
+        options,
+        default=default or [],
+        key=key,
+    )
+    values = [value for value in selected if value != "其他"]
+    if "其他" in selected:
+        custom = st.text_input(
+            f"自定义{label}",
+            key=f"{key}_other",
+            placeholder="可输入多个值，用逗号分隔",
+        )
+        values.extend(split_preference_values(custom))
+    return values
 
 
 def render_jd_analysis(jd: Any) -> None:
@@ -250,8 +339,11 @@ def render_distribution_chart(title: str, distribution: Dict[str, int]) -> None:
 
 
 def render_single_mode() -> None:
-    st.title("AI 秋招岗位匹配与简历优化助手")
-    st.caption("上传或粘贴简历，再粘贴岗位 JD，自动生成匹配评分、证据表、优化建议和投递话术。")
+    st.title("AI 岗位搜索、匹配评分与求职优化助手")
+    st.caption(
+        "面向实习、校招、社招、转行和在职跳槽等场景，"
+        "分析单个岗位 JD 并生成证据匹配、优化建议和投递话术。"
+    )
 
     resume_col, jd_col = st.columns(2)
     with resume_col:
@@ -270,11 +362,17 @@ def render_single_mode() -> None:
 
     with jd_col:
         st.subheader("2. JD 输入区")
-        target_role = st.text_input(
+        candidate_type = select_single_preference(
+            "求职阶段 / 候选人类型",
+            CANDIDATE_TYPE_OPTIONS,
+            "single_candidate_type",
+            "校招 / 应届",
+        )
+        target_role = select_single_preference(
             "目标岗位方向",
-            value="AI 产品经理",
-            placeholder="例如 AI 产品经理、数据分析师、商业分析师、数据产品经理、AI Agent 产品经理",
-            key="single_target_role",
+            TARGET_ROLE_OPTIONS,
+            "single_target_role",
+            "AI 产品经理",
         )
         jd_text = st.text_area(
             "粘贴岗位 JD",
@@ -297,6 +395,7 @@ def render_single_mode() -> None:
                     resume_text=resume_text,
                     jd_text=jd_text,
                     target_role=target_role,
+                    candidate_type=candidate_type,
                 )
             except Exception as exc:
                 st.error(f"分析失败：{exc}")
@@ -377,20 +476,26 @@ def render_batch_mode() -> None:
         )
     with preference_col:
         st.subheader("2. 求职偏好")
-        target_role = st.text_input(
-            "目标岗位方向",
-            value="AI 产品经理",
-            placeholder="AI 产品经理、数据分析师、商业分析师...",
-            key="batch_target_role",
+        candidate_type = select_single_preference(
+            "求职阶段 / 候选人类型",
+            CANDIDATE_TYPE_OPTIONS,
+            "batch_candidate_type",
+            "校招 / 应届",
         )
-        target_city = st.text_input(
-            "目标城市",
-            placeholder="北京、上海、杭州、成都、深圳、远程",
+        target_role = select_single_preference(
+            "目标岗位方向",
+            TARGET_ROLE_OPTIONS,
+            "batch_target_role",
+            "AI 产品经理",
+        )
+        target_cities = select_multiple_preferences(
+            "城市 / 地区偏好",
+            LOCATION_OPTIONS,
             key="batch_target_city",
         )
-        job_type = st.text_input(
+        job_types = select_multiple_preferences(
             "岗位类型",
-            placeholder="实习、校招、全职、可转正实习",
+            JOB_TYPE_OPTIONS,
             key="batch_job_type",
         )
         company_preference = st.text_input(
@@ -435,9 +540,10 @@ def render_batch_mode() -> None:
             return
 
         preferences = JobPreferences(
+            candidate_type=candidate_type,
             target_role=target_role,
-            target_city=target_city,
-            job_type=job_type,
+            target_city="、".join(target_cities),
+            job_type="、".join(job_types),
             company_preference=company_preference,
         )
         with st.spinner(f"正在分析并排序 {len(jobs)} 个岗位..."):
@@ -567,20 +673,29 @@ def render_crawl_mode() -> None:
         )
     with preference_col:
         st.subheader("2. 岗位偏好")
-        target_role = st.text_input(
+        candidate_type = select_single_preference(
+            "求职阶段 / 候选人类型",
+            CANDIDATE_TYPE_OPTIONS,
+            "crawl_candidate_type",
+            "校招 / 应届",
+        )
+        target_role = select_single_preference(
             "目标岗位方向",
-            value="AI 产品经理",
-            key="crawl_target_role",
+            TARGET_ROLE_OPTIONS,
+            "crawl_target_role",
+            "AI 产品经理",
         )
-        target_cities = st.text_input(
-            "目标城市",
-            value="北京、上海、杭州、成都、深圳、远程",
+        target_cities = select_multiple_preferences(
+            "城市 / 地区偏好",
+            LOCATION_OPTIONS,
             key="crawl_target_cities",
+            default=["北京", "上海", "杭州", "深圳", "成都", "远程"],
         )
-        job_types = st.text_input(
+        job_types = select_multiple_preferences(
             "岗位类型",
-            value="实习、校招、全职、可转正实习",
+            JOB_TYPE_OPTIONS,
             key="crawl_job_types",
+            default=["实习", "可转正实习", "校招", "全职"],
         )
         keywords = st.text_input(
             "关键词",
@@ -639,9 +754,10 @@ def render_crawl_mode() -> None:
             return
 
         preference = JobSearchPreference(
+            candidate_type=candidate_type,
             target_role=target_role,
-            target_cities=split_preference_values(target_cities),
-            job_types=split_preference_values(job_types),
+            target_cities=target_cities,
+            job_types=job_types,
             keywords=split_preference_values(keywords),
             company_preferences=split_preference_values(company_preferences),
             max_jobs=int(max_jobs),

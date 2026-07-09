@@ -90,6 +90,7 @@ class CrawlWorkflow:
             resume_text=resume_text,
             jobs=job_postings,
             preferences=JobPreferences(
+                candidate_type=preference.candidate_type,
                 target_role=preference.target_role,
                 target_city="、".join(preference.target_cities),
                 job_type="、".join(preference.job_types),

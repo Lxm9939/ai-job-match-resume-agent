@@ -16,7 +16,12 @@ from docx.shared import Inches, Pt, RGBColor
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_PATH = PROJECT_ROOT / "AI秋招岗位匹配与简历优化助手_项目计划书.docx"
+OUTPUT_PATH = (
+    PROJECT_ROOT
+    / "docs"
+    / "deliverables"
+    / "AI岗位搜索匹配评分与求职优化助手_项目计划书.docx"
+)
 SCREENSHOT_DIR = PROJECT_ROOT / "docs" / "screenshots"
 WORKFLOW_MD = PROJECT_ROOT / "docs" / "workflow.md"
 
@@ -38,7 +43,7 @@ def main() -> None:
     add_heading(doc, "一、项目概述", 1)
     add_para(
         doc,
-        "本项目是一个面向秋招候选人的网页端求职辅助工具。用户可以上传简历文件或粘贴简历文本，"
+        "本项目是一个面向不同求职阶段候选人的网页端求职辅助工具。用户可以上传简历文件或粘贴简历文本，"
         "再输入岗位 JD 和目标岗位方向，系统通过 8 个模块化 Agent 完成岗位解析、简历解析、证据匹配、"
         "关键词覆盖、匹配评分、简历优化、投递话术生成和最终报告汇总。"
     )
@@ -50,7 +55,7 @@ def main() -> None:
     add_key_value_table(
         doc,
         [
-            ("项目名称", "AI 秋招岗位匹配与简历优化助手"),
+            ("项目名称", "AI 岗位搜索、匹配评分与求职优化助手"),
             ("项目目录", str(PROJECT_ROOT)),
             ("应用形态", "Python + Streamlit 网页应用"),
             ("核心架构", "模块化 Agent 工作流 + Pydantic 数据模型 + 可选 OpenAI API"),
@@ -62,7 +67,7 @@ def main() -> None:
     add_bullets(
         doc,
         [
-            "秋招 JD 信息复杂，岗位职责、任职要求、工具栈、业务关键词和隐含能力常常混在一起。",
+            "不同岗位的 JD 信息复杂，岗位职责、任职要求、工具栈、业务关键词和隐含能力常常混在一起。",
             "候选人难以快速判断简历经历与具体岗位要求之间的证据关系。",
             "简历关键词覆盖不足时，容易在招聘方快速浏览或 ATS 初筛环节失分。",
             "批量投递时，手动改简历和编写多渠道投递话术效率较低。",
@@ -74,10 +79,10 @@ def main() -> None:
     add_bullets(
         doc,
         [
-            "2026/2027 届秋招学生和实习求职者。",
-            "目标方向包括 AI 产品经理、数据分析师、商业分析师、数据产品经理、AI Agent 产品经理等。",
-            "需要快速判断岗位匹配度、定位简历短板、提升投递效率的候选人。",
-            "希望把简历优化过程结构化、产品化、可解释化的作品集用户。",
+            "应届生、实习求职者、海外留学生和回国求职用户。",
+            "社招候选人、在职跳槽用户和转行到数据、AI、产品、分析岗位的人。",
+            "申请 AI 应用、Data Agent、数据分析、商业分析、BI 分析和产品经理等岗位的人。",
+            "需要批量比较岗位、优化简历并准备面试的求职者。",
         ],
     )
 
@@ -245,7 +250,7 @@ def main() -> None:
     add_heading(doc, "十三、简历项目描述", 1)
     add_callout(
         doc,
-        "AI 秋招岗位匹配与简历优化助手：基于 Python、Streamlit 和多 Agent 工作流构建求职辅助 MVP，"
+        "AI 岗位搜索、匹配评分与求职优化助手：基于 Python、Streamlit 和多 Agent 工作流构建通用求职辅助应用，"
         "支持简历上传/粘贴、JD 解析、简历证据匹配、关键词覆盖分析、可解释匹配评分、简历 bullet 优化、"
         "多渠道投递话术生成和 Markdown/Word 报告导出；封装 OpenAI API 并提供无 Key 可运行的 mock 模式，"
         "使用 Pydantic 管理结构化输出，pytest 覆盖端到端工作流和报告导出。"
@@ -311,7 +316,7 @@ def configure_document(doc: Document) -> None:
 def add_cover(doc: Document) -> None:
     section = doc.sections[0]
     header = section.header.paragraphs[0]
-    header.text = "AI 秋招岗位匹配与简历优化助手 | 项目计划书"
+    header.text = "AI 岗位搜索、匹配评分与求职优化助手 | 项目计划书"
     header.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     header.runs[0].font.size = Pt(9)
     header.runs[0].font.color.rgb = MUTED
@@ -329,7 +334,7 @@ def add_cover(doc: Document) -> None:
 
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    tr = title.add_run("AI 秋招岗位匹配与简历优化助手")
+    tr = title.add_run("AI 岗位搜索、匹配评分与求职优化助手")
     tr.font.name = "Microsoft YaHei"
     tr._element.rPr.rFonts.set(qn("w:eastAsia"), "Microsoft YaHei")
     tr.font.size = Pt(26)
@@ -476,7 +481,7 @@ def add_footer(doc: Document) -> None:
     for section in doc.sections:
         footer = section.footer.paragraphs[0]
         footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        footer.text = "AI 秋招岗位匹配与简历优化助手项目计划书"
+        footer.text = "AI 岗位搜索、匹配评分与求职优化助手项目计划书"
         footer.runs[0].font.size = Pt(9)
         footer.runs[0].font.color.rgb = MUTED
 

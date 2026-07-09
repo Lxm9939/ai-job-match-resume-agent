@@ -31,7 +31,13 @@ class ResumeMatchWorkflow:
         self.outreach_agent = OutreachAgent(self.llm_client)
         self.report_agent = ReportAgent(self.llm_client)
 
-    def run(self, resume_text: str, jd_text: str, target_role: str = "") -> WorkflowResult:
+    def run(
+        self,
+        resume_text: str,
+        jd_text: str,
+        target_role: str = "",
+        candidate_type: str = "",
+    ) -> WorkflowResult:
         resume_text = normalize_text(resume_text)
         jd_text = normalize_text(jd_text)
         if not resume_text:
@@ -45,7 +51,13 @@ class ResumeMatchWorkflow:
         keyword_coverage = self.keyword_agent.run(jd, resume)
         score = self.scoring_agent.run(jd, resume, evidence_matches, keyword_coverage)
         optimization_suggestions = self.resume_optimizer.run(jd, resume)
-        outreach = self.outreach_agent.run(jd, resume, score, target_role=target_role)
+        outreach = self.outreach_agent.run(
+            jd,
+            resume,
+            score,
+            target_role=target_role,
+            candidate_type=candidate_type,
+        )
         final_report = self.report_agent.run(
             jd,
             resume,
@@ -66,4 +78,3 @@ class ResumeMatchWorkflow:
             outreach=outreach,
             final_report=final_report,
         )
-

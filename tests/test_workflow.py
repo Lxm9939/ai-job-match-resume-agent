@@ -25,7 +25,7 @@ def test_workflow_runs_in_mock_mode() -> None:
     assert result.resume.skills
     assert result.evidence_matches
     assert 0 <= result.score.total_score <= 100
-    assert "AI 秋招岗位匹配报告" in result.final_report.markdown
+    assert "AI 岗位匹配与求职优化报告" in result.final_report.markdown
     all_keywords = (
         result.keyword_coverage.covered_keywords
         + result.keyword_coverage.weak_keywords

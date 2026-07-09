@@ -116,6 +116,7 @@ class JobPosting(BaseModel):
 class JobPreferences(BaseModel):
     """User preferences used to explain and contextualize batch ranking."""
 
+    candidate_type: str = ""
     target_role: str = ""
     target_city: str = ""
     job_type: str = ""
@@ -200,6 +201,7 @@ class CrawlResult(BaseModel):
 
 
 class JobSearchPreference(BaseModel):
+    candidate_type: str = ""
     target_role: str = ""
     target_cities: List[str] = Field(default_factory=list)
     job_types: List[str] = Field(default_factory=list)
