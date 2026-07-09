@@ -27,6 +27,7 @@ Thumbs.db
 # Generated local outputs
 outputs/
 tmp/
+data/cache/*.json
 *.log
 *.tmp
 *.bak

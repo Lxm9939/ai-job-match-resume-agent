@@ -5,7 +5,7 @@
 
 一个基于 **Streamlit + 多 Agent 工作流** 的秋招求职辅助项目。它不是简单的“LLM 简历改写器”，而是把 JD 解析、简历证据抽取、关键词覆盖、可解释评分、简历优化建议、面试准备和投递话术生成拆成多个可追踪的 Agent 节点，帮助候选人更系统地完成岗位适配分析。
 
-项目同时保留 **V1 单 JD 深度分析** 和 **V2 批量岗位匹配推荐**。用户既可以针对一个岗位生成完整分析，也可以导入 CSV / Excel 岗位列表或粘贴多个 JD，获得岗位排序、逐岗位简历优化和面试准备建议。没有 API Key 时也可以使用 mock 模式本地演示。
+项目同时提供 **V1 单 JD 深度分析**、**V2 批量岗位匹配推荐** 和 **V3 公开岗位源抓取**。用户既可以手动分析岗位，也可以导入岗位列表，或从明确配置且 robots.txt 允许的公开 Careers 页面抓取岗位后进入批量评分。没有 API Key 或真实岗位源时，也能使用本地 Demo 完整演示。
 
 ## 项目背景
 
@@ -18,7 +18,7 @@
 
 本项目把这些环节拆成可解释的 Agent 工作流，用一个可运行的网页 MVP 帮助候选人快速完成“JD 理解 - 简历匹配 - 优化建议 - 投递表达”的闭环。
 
-## V1 / V2 功能
+## V1 / V2 / V3 功能
 
 ### V1：单个 JD 匹配分析
 
@@ -40,6 +40,16 @@
 - 为每个岗位生成针对性简历优化、投递话术和面试准备清单。
 - 支持下载批量 Markdown 匹配报告。
 - 不抓取需要登录或受反爬限制的招聘平台，当前由用户主动导入岗位数据。
+
+### V3：公开岗位源自动抓取
+
+- 从用户配置的公开公司 Careers 静态 HTML 页面读取岗位候选。
+- 请求前检查 robots.txt，网络检查失败时默认跳过。
+- 设置明确 User-Agent、请求超时、至少 1 秒来源间隔、最大岗位数和一小时本地缓存。
+- 按岗位方向、关键词、城市和岗位类型筛选，再复用 V2 完成评分排序。
+- 保留每条岗位的来源链接，并支持下载抓取岗位 CSV 和匹配 Markdown 报告。
+- 内置 `examples/sample_crawled_jobs.json`，无需真实网站即可演示完整 V3。
+- 不支持登录、验证码、Cookie、代理池、模拟登录或任何反爬绕过。
 
 ## Agent 工作流图
 
@@ -88,6 +98,28 @@ flowchart TD
     N --> O
 ```
 
+### V3 公开岗位源工作流
+
+```mermaid
+flowchart TD
+    A[上传简历 / 粘贴简历文本] --> B[输入岗位偏好]
+    B --> C[读取公开岗位源配置]
+    C --> D[检查 robots.txt]
+    D --> E{允许抓取?}
+    E -- 否 --> F[跳过该岗位源并记录原因]
+    E -- 是 --> G[抓取公开岗位页面]
+    G --> H[解析岗位信息]
+    H --> I[岗位关键词与城市筛选]
+    I --> J[进入批量岗位匹配工作流]
+    J --> K[岗位评分排序]
+    K --> L[生成简历优化建议]
+    K --> M[生成面试注意事项]
+    K --> N[生成投递话术]
+    L --> O[导出岗位抓取与匹配报告]
+    M --> O
+    N --> O
+```
+
 ## 页面截图
 
 ### 首页
@@ -118,9 +150,15 @@ ai-job-match-resume-agent/
 │   ├── report_exporter.py
 │   ├── workflow.py
 │   ├── batch_workflow.py
+│   ├── crawl_workflow.py
 │   ├── agents/
+│   ├── job_sources/
 │   ├── schemas/
 │   └── utils/
+├── configs/
+│   └── job_sources.example.json
+├── data/
+│   └── cache/
 ├── docs/
 │   ├── deliverables/
 │   ├── project_plan.md
@@ -130,11 +168,15 @@ ai-job-match-resume-agent/
 ├── examples/
 │   ├── sample_resume.txt
 │   ├── sample_jd.txt
-│   └── sample_jobs.csv
+│   ├── sample_jobs.csv
+│   └── sample_crawled_jobs.json
 └── tests/
     ├── test_workflow.py
     ├── test_job_list_parser.py
-    └── test_batch_workflow.py
+    ├── test_batch_workflow.py
+    ├── test_robots_checker.py
+    ├── test_job_filter_agent.py
+    └── test_crawl_workflow.py
 ```
 
 ## 快速开始
@@ -177,12 +219,42 @@ APP_DEBUG=false
 - `auto`：有 `OPENAI_API_KEY` 时使用 OpenAI，否则回退 mock。
 - `openai`：优先使用 OpenAI，调用失败时回退 mock 结果。
 
+V3 的“使用示例抓取结果演示”与 LLM Mock 模式彼此独立：前者避免真实网络请求，后者避免 OpenAI API 请求。两项同时启用时，整个流程可离线演示。
+
+## 添加公开岗位源
+
+复制并修改 `configs/job_sources.example.json`，或在 V3 页面上传同结构 JSON：
+
+```json
+[
+  {
+    "source_id": "my_company_careers",
+    "source_name": "My Company Careers",
+    "source_type": "public_html",
+    "base_url": "https://company.example",
+    "list_url": "https://company.example/careers",
+    "allowed": true,
+    "notes": "无需登录、允许公开访问的公司招聘页"
+  }
+]
+```
+
+添加前请确认：
+
+- 页面无需账号、Cookie、验证码或交互式登录。
+- `robots.txt` 允许项目 User-Agent 访问对应路径。
+- 来源是公司官网 Careers 页面或其他获得许可的公开静态 HTML 页面。
+- 不要添加 Boss 直聘、智联招聘、猎聘、前程无忧、拉勾等登录或强反爬平台。
+
+当前通用解析器以公开静态 HTML 为主。站点结构不同可能导致字段不完整，此时系统会保留来源链接，并将过短内容标记为“JD 信息不足”。
+
 ## Limitations / 项目局限性
 
 - Mock 模式是本地规则和关键词库驱动，适合演示产品流程，但不等同于真实 LLM 的语义理解能力。
 - 匹配评分是可解释的启发式评分，用于定位优势和短板，不应被当作真实招聘结果或录用概率。
 - 批量排行当前按五维匹配总分排序，求职偏好作为结果解释信息，不代表招聘平台推荐算法。
-- 当前不会自动抓取 Boss 直聘、智联招聘等平台，岗位数据需通过 CSV / Excel 或文本导入。
+- V3 的通用 HTML 解析依赖页面结构，动态渲染或结构特殊的网站可能无法提取完整岗位。
+- V3 只访问明确配置且 robots.txt 允许的公开页面；不支持登录平台、验证码或反爬绕过。
 - 简历优化建议遵循“不编造经历”的原则；用户需要自行确认所有项目、工具、指标和结果都真实发生过。
 - 上传或粘贴真实简历前，应注意隐私保护；如果使用 OpenAI 模式，请确认自己接受相应 API 的数据处理方式。
 
@@ -198,6 +270,8 @@ pytest
 - `.docx` Word 报告导出是否生成有效 Word 文件。
 - CSV 岗位列表解析、多 JD 文本拆分和缺失字段兜底。
 - 批量岗位结果数量、降序排序、推荐结论和面试准备输出。
+- robots.txt 允许、拒绝和网络失败时的安全跳过。
+- V3 岗位偏好筛选与 Demo 抓取结果接入批量匹配。
 
 GitHub Actions 会在 `push` 和 `pull_request` 时自动运行 pytest。
 
@@ -206,7 +280,8 @@ GitHub Actions 会在 `push` 和 `pull_request` 时自动运行 pytest。
 - 在线部署：部署到 Streamlit Community Cloud、Hugging Face Spaces 或其他平台。
 - 多版本简历对比：比较不同简历版本在同一 JD 下的匹配差异。
 - 岗位关键词库：为 AI 产品、数据分析、商业分析、数据产品等方向维护专属关键词库和评分策略。
-- 公开招聘源适配：为公司官网或公开招聘页提供可配置的轻量导入器。
+- 站点专属适配器：为获得许可的公司官网招聘页提供可维护的字段选择器。
+- 公开 RSS/API 适配：在来源明确授权时增加结构化数据适配器。
 - 批量 Word 导出：将 V2 排行榜与逐岗位建议导出为 `.docx`。
 
 ## License

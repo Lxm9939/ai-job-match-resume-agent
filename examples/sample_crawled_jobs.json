@@ -1,0 +1,74 @@
+[
+  {
+    "job_title": "AI 产品经理（校招）",
+    "company": "星云智能科技",
+    "city": "北京",
+    "job_type": "校招",
+    "jd_text": "负责大模型产品的用户调研、需求拆解、PRD 编写与原型设计，协同算法和研发推进 AI Agent 功能上线；建立模型效果、任务完成率和用户反馈指标。要求本科及以上，理解 LLM、Prompt 和 Agent 工作流，熟悉 SQL、Figma 或 Axure，有 AI 产品原型经验优先。",
+    "source_url": "https://careers.example.com/jobs/ai-product-manager-101",
+    "publish_date": "2026-07-06",
+    "crawled_at": "2026-07-09T02:00:00+00:00",
+    "source_name": "星云智能 Careers",
+    "jd_quality": "正常"
+  },
+  {
+    "job_title": "AI Agent 产品助理",
+    "company": "启元 AI 实验室",
+    "city": "成都、远程",
+    "job_type": "实习",
+    "jd_text": "协助梳理企业知识库与 AI Agent 使用场景，维护 Prompt 模板、工具调用流程和产品文档；参与 RAG 检索效果测试、问题归因和版本复盘。要求具备 Python 基础，关注大模型应用，能够完成需求分析、测试用例和跨团队沟通。",
+    "source_url": "https://jobs.example.org/openings/agent-product-assistant",
+    "publish_date": "2026-07-07",
+    "crawled_at": "2026-07-09T02:00:00+00:00",
+    "source_name": "启元 AI Careers",
+    "jd_quality": "正常"
+  },
+  {
+    "job_title": "数据分析师",
+    "company": "云帆电商",
+    "city": "上海",
+    "job_type": "全职",
+    "jd_text": "使用 SQL 和 Python 完成经营数据提取、清洗和专题分析，搭建 BI 看板并分析转化率、留存和用户分层；与产品和运营协作推动策略落地。要求熟悉 Excel、SQL、Tableau 或 Power BI，具备结构化分析和业务表达能力。",
+    "source_url": "https://careers.example.com/jobs/data-analyst-202",
+    "publish_date": "2026-07-05",
+    "crawled_at": "2026-07-09T02:00:00+00:00",
+    "source_name": "云帆电商 Careers",
+    "jd_quality": "正常"
+  },
+  {
+    "job_title": "数据产品经理",
+    "company": "知衡数据平台",
+    "city": "杭州",
+    "job_type": "可转正实习",
+    "jd_text": "参与指标平台和自助分析产品规划，访谈业务用户并输出 PRD、原型和验收标准；协同数据研发完成埋点、指标口径和 BI 看板建设。要求理解数据仓库与指标体系，熟悉 SQL、Axure 或 Figma，有数据分析项目经验优先。",
+    "source_url": "https://jobs.example.net/careers/data-product-manager",
+    "publish_date": "2026-07-04",
+    "crawled_at": "2026-07-09T02:00:00+00:00",
+    "source_name": "知衡数据平台 Careers",
+    "jd_quality": "正常"
+  },
+  {
+    "job_title": "商业分析实习生",
+    "company": "远景消费科技",
+    "city": "深圳",
+    "job_type": "实习",
+    "jd_text": "支持市场研究、经营分析、核心指标拆解和管理层汇报，使用 Excel、SQL 或 Python 进行数据验证，并与产品、销售和运营团队跟进策略执行。要求逻辑清晰、数据敏感，具备商业分析或咨询项目经验。",
+    "source_url": "https://careers.example.com/jobs/business-analyst-intern-303",
+    "publish_date": "2026-07-03",
+    "crawled_at": "2026-07-09T02:00:00+00:00",
+    "source_name": "远景消费科技 Careers",
+    "jd_quality": "正常"
+  },
+  {
+    "job_title": "行政支持专员",
+    "company": "示例制造集团",
+    "city": "天津",
+    "job_type": "全职",
+    "jd_text": "负责会议安排、办公用品管理、访客接待和行政流程维护，协助组织内部活动。要求沟通细致，熟练使用办公软件，有行政支持经验优先。",
+    "source_url": "https://careers.example.com/jobs/admin-support-404",
+    "publish_date": "2026-07-02",
+    "crawled_at": "2026-07-09T02:00:00+00:00",
+    "source_name": "示例制造 Careers",
+    "jd_quality": "正常"
+  }
+]

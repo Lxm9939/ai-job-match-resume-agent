@@ -154,3 +154,59 @@ class BatchMatchResult(BaseModel):
     risky_matches: List[JobMatchResult] = Field(default_factory=list)
     final_summary: str = ""
     report_markdown: str = ""
+
+
+class JobSource(BaseModel):
+    source_id: str
+    source_name: str
+    source_type: str = "public_html"
+    base_url: str
+    list_url: str
+    allowed: bool = False
+    notes: str = ""
+
+
+class CrawledJob(BaseModel):
+    job_title: str = "未知岗位"
+    company: str = "公司未知"
+    city: str = "城市未知"
+    job_type: str = "岗位类型未知"
+    jd_text: str
+    source_url: str
+    publish_date: str = ""
+    crawled_at: str = ""
+    source_name: str = ""
+    jd_quality: str = "正常"
+
+
+class CrawlResult(BaseModel):
+    source: JobSource
+    jobs: List[CrawledJob] = Field(default_factory=list)
+    skipped_reason: str = ""
+    error_message: str = ""
+    crawled_count: int = 0
+
+
+class JobSearchPreference(BaseModel):
+    target_role: str = ""
+    target_cities: List[str] = Field(default_factory=list)
+    job_types: List[str] = Field(default_factory=list)
+    keywords: List[str] = Field(default_factory=list)
+    company_preferences: List[str] = Field(default_factory=list)
+    max_jobs: int = 20
+
+
+class JobFilterResult(BaseModel):
+    filtered_jobs: List[CrawledJob] = Field(default_factory=list)
+    removed_jobs: List[CrawledJob] = Field(default_factory=list)
+    filter_reason_summary: str = ""
+
+
+class CrawlWorkflowResult(BaseModel):
+    crawl_results: List[CrawlResult] = Field(default_factory=list)
+    raw_jobs: List[CrawledJob] = Field(default_factory=list)
+    filter_result: JobFilterResult = Field(default_factory=JobFilterResult)
+    batch_result: BatchMatchResult
+    source_count: int = 0
+    skipped_source_count: int = 0
+    demo_mode: bool = False

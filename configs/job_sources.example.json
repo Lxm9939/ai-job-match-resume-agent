@@ -1,0 +1,11 @@
+[
+  {
+    "source_id": "company_careers_demo",
+    "source_name": "Demo Company Careers",
+    "source_type": "public_html",
+    "base_url": "https://example.com",
+    "list_url": "https://example.com/careers",
+    "allowed": true,
+    "notes": "示例配置，不代表真实岗位源；请替换为允许公开访问的公司官网 Careers 页面。"
+  }
+]
