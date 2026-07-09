@@ -5,7 +5,7 @@
 
 一个基于 **Streamlit + 多 Agent 工作流** 的秋招求职辅助项目。它不是简单的“LLM 简历改写器”，而是把 JD 解析、简历证据抽取、关键词覆盖、可解释评分、简历优化建议、面试准备和投递话术生成拆成多个可追踪的 Agent 节点，帮助候选人更系统地完成岗位适配分析。
 
-项目同时提供 **V1 单 JD 深度分析**、**V2 批量岗位匹配推荐** 和 **V3 公开岗位源抓取**。用户既可以手动分析岗位，也可以导入岗位列表，或从明确配置且 robots.txt 允许的公开 Careers 页面抓取岗位后进入批量评分。没有 API Key 或真实岗位源时，也能使用本地 Demo 完整演示。
+项目同时提供 **V1 单 JD 深度分析**、**V2 批量岗位匹配推荐** 和 **V3 公开岗位源抓取**，并通过 V3.2 Dashboard 汇总岗位城市、类型、推荐结论、质量分布和高频技能。这让项目同时体现 AI Agent 编排、规则评测和数据分析能力。没有 API Key 或真实岗位源时，也能使用本地 Demo 完整演示。
 
 ## 项目背景
 
@@ -58,6 +58,14 @@
 - 岗位质量评分：按标题、公司、城市、JD 长度、技能关键词、来源链接和发布日期计算 0-100 分。
 - 质量标签：输出高/中/低三档；低质量岗位保留分析，但明确标记为“低置信度”。
 - 抓取统计：展示原始、去重后、筛选后数量，质量分布，以及 robots 跳过和抓取失败来源数量。
+
+### V3.2：岗位匹配数据分析 Dashboard
+
+- 总览指标：岗位总数、平均/最高/最低匹配分、三档投递建议、质量分布和低置信度数量。
+- 分布分析：城市分布、岗位类型分布、推荐结论分布和岗位质量分布。
+- Top 分析：高匹配岗位 Top 10、缺失关键词 Top 10、常见技能关键词 Top 10 和风险关键词 Top 10。
+- 导出增强：岗位匹配排行榜 CSV、缺失关键词 CSV、岗位分析 Summary Markdown。
+- V2 与 V3 共用同一分析口径，便于比较手动导入岗位和公开来源岗位。
 
 ## Agent 工作流图
 
@@ -158,6 +166,7 @@ ai-job-match-resume-agent/
 │   ├── llm_client.py
 │   ├── document_parser.py
 │   ├── report_exporter.py
+│   ├── analytics.py
 │   ├── workflow.py
 │   ├── batch_workflow.py
 │   ├── crawl_workflow.py
@@ -188,7 +197,8 @@ ai-job-match-resume-agent/
     ├── test_job_filter_agent.py
     ├── test_crawl_workflow.py
     ├── test_job_deduplicator.py
-    └── test_job_quality.py
+    ├── test_job_quality.py
+    └── test_analytics.py
 ```
 
 ## 快速开始
@@ -286,6 +296,7 @@ pytest
 - robots.txt 允许、拒绝和网络失败时的安全跳过。
 - V3 岗位偏好筛选与 Demo 抓取结果接入批量匹配。
 - 岗位去重、质量评分、低置信度 warning 和 V3 质量统计。
+- Dashboard 平均分、推荐/城市/质量分布和 Top 缺失关键词统计。
 
 GitHub Actions 会在 `push` 和 `pull_request` 时自动运行 pytest。
 

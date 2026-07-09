@@ -9,12 +9,17 @@ import pandas as pd
 import streamlit as st
 
 from src.agents.job_list_parser_agent import JobListParserAgent
+from src.analytics import (
+    build_analytics_summary_markdown,
+    build_job_match_analytics,
+    build_ranking_rows,
+)
 from src.batch_workflow import BatchMatchWorkflow
 from src.config import get_settings
 from src.crawl_workflow import CrawlWorkflow
 from src.document_parser import parse_uploaded_file
 from src.report_exporter import DOCX_MIME_TYPE, export_workflow_result_to_docx
-from src.schemas.models import InterviewPrep, JobPreferences, JobSearchPreference
+from src.schemas.models import BatchMatchResult, InterviewPrep, JobPreferences, JobSearchPreference
 from src.workflow import ResumeMatchWorkflow
 
 
@@ -139,6 +144,109 @@ def render_interview_prep(prep: InterviewPrep) -> None:
         render_list("业务准备方向", prep.business_preparation)
         render_list("风险追问", prep.risk_questions)
         render_list("建议回答策略", prep.suggested_answer_strategy)
+
+
+def render_job_analytics_dashboard(
+    result: BatchMatchResult,
+    key_prefix: str,
+) -> None:
+    analytics = build_job_match_analytics(result)
+    st.markdown("### 岗位分析 Dashboard")
+
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("岗位总数", analytics["total_jobs"])
+    metric_cols[1].metric("平均匹配分", analytics["average_match_score"])
+    metric_cols[2].metric("推荐投递数", analytics["recommended_count"])
+    metric_cols[3].metric("高质量岗位数", analytics["high_quality_count"])
+    metric_cols[4].metric("低置信度岗位数", analytics["low_confidence_count"])
+
+    chart_col1, chart_col2 = st.columns(2)
+    with chart_col1:
+        render_distribution_chart("城市分布", analytics["city_distribution"])
+        render_distribution_chart(
+            "推荐结论分布",
+            analytics["recommendation_distribution"],
+        )
+    with chart_col2:
+        render_distribution_chart(
+            "岗位类型分布",
+            analytics["job_type_distribution"],
+        )
+        render_distribution_chart(
+            "岗位质量分布",
+            analytics["quality_label_distribution"],
+        )
+
+    top_tabs = st.tabs(
+        ["高匹配岗位 Top 10", "缺失关键词 Top 10", "常见技能关键词 Top 10"]
+    )
+    with top_tabs[0]:
+        top_jobs = pd.DataFrame(analytics["top_matched_jobs"])
+        st.dataframe(
+            top_jobs,
+            use_container_width=True,
+            hide_index=True,
+            column_config={"source_url": st.column_config.LinkColumn("source_url")},
+        )
+    with top_tabs[1]:
+        st.dataframe(
+            pd.DataFrame(analytics["top_missing_keywords"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+    with top_tabs[2]:
+        st.dataframe(
+            pd.DataFrame(analytics["top_common_skills"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    ranking_csv = pd.DataFrame(
+        build_ranking_rows(result.ranked_jobs)
+    ).to_csv(index=False).encode("utf-8-sig")
+    missing_csv = pd.DataFrame(
+        analytics["top_missing_keywords"]
+    ).to_csv(index=False).encode("utf-8-sig")
+    summary_markdown = build_analytics_summary_markdown(analytics)
+    download_cols = st.columns(3)
+    with download_cols[0]:
+        st.download_button(
+            "下载岗位匹配排行榜 CSV",
+            ranking_csv,
+            file_name="job_match_ranking.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key=f"{key_prefix}_ranking_csv",
+        )
+    with download_cols[1]:
+        st.download_button(
+            "下载缺失关键词 CSV",
+            missing_csv,
+            file_name="missing_keywords.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key=f"{key_prefix}_missing_csv",
+        )
+    with download_cols[2]:
+        st.download_button(
+            "下载岗位分析 Summary",
+            summary_markdown,
+            file_name="job_analytics_summary.md",
+            mime="text/markdown",
+            use_container_width=True,
+            key=f"{key_prefix}_analytics_md",
+        )
+
+
+def render_distribution_chart(title: str, distribution: Dict[str, int]) -> None:
+    st.markdown(f"#### {title}")
+    if not distribution:
+        st.caption("暂无数据")
+        return
+    chart_data = pd.DataFrame(
+        [{"类别": label, "岗位数量": count} for label, count in distribution.items()]
+    ).set_index("类别")
+    st.bar_chart(chart_data)
 
 
 def render_single_mode() -> None:
@@ -386,6 +494,7 @@ def render_batch_mode() -> None:
         mime="text/markdown",
         use_container_width=True,
     )
+    render_job_analytics_dashboard(result, "batch")
 
     st.markdown("### 岗位详情")
     selected_job_id = st.selectbox(
@@ -676,6 +785,7 @@ def render_crawl_mode() -> None:
         hide_index=True,
         column_config={"来源链接": st.column_config.LinkColumn("来源链接")},
     )
+    render_job_analytics_dashboard(batch_result, "crawl")
 
     st.markdown("### 岗位详情")
     selected_job_id = st.selectbox(

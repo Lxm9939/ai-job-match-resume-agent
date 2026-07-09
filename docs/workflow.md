@@ -204,3 +204,34 @@ flowchart TD
 4. 质量分由岗位名称、公司、城市、JD 长度、技能关键词、来源链接和发布日期组成。
 5. 质量标签分为高、中、低；低质量记录在页面标记为“低置信度”。
 6. 工作流统计原始数量、去重后数量、筛选后数量、三档质量数量、robots 跳过来源和抓取失败来源。
+
+## V3.2 岗位分析 Dashboard
+
+V3.2 在 V2/V3 得到 `BatchMatchResult` 后增加只读 Analytics 层。该层不修改 Agent 输出、匹配分或推荐结论，只负责聚合分析和导出。
+
+```mermaid
+flowchart LR
+    A[V2 批量导入结果] --> C[BatchMatchResult]
+    B[V3 公开岗位抓取结果] --> C
+    C --> D[Analytics 模块]
+    D --> E[总览指标]
+    D --> F[城市 / 类型 / 推荐 / 质量分布]
+    D --> G[高匹配岗位与关键词 Top 10]
+    E --> H[Streamlit Dashboard]
+    F --> H
+    G --> H
+    D --> I[排行榜 CSV]
+    D --> J[缺失关键词 CSV]
+    D --> K[Summary Markdown]
+```
+
+### Analytics 输入输出
+
+| 输入 | 处理 | 输出 |
+| --- | --- | --- |
+| `BatchMatchResult` 或 `List[JobMatchResult]` | 汇总匹配分、推荐档位和质量标签 | 总览指标 |
+| 岗位城市、类型、推荐结论、质量标签 | 多值拆分与频次统计 | 四类分布字典 |
+| 缺失关键词、JD 技能/工具、风险项 | 岗位内去重后计数 | Top 10 表格 |
+| 完整岗位匹配列表 | 按匹配分排序并结构化 | 排行榜 CSV 与 Markdown 摘要 |
+
+Dashboard 使用 Streamlit 原生 `metric`、`bar_chart` 和 `dataframe`，没有新增复杂可视化依赖。V2 未进行抓取质量评分的岗位显示为“未评分”，不会被误判为低质量。
