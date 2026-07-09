@@ -160,7 +160,9 @@ flowchart TD
     E -- 否 --> F[跳过该岗位源并记录原因]
     E -- 是 --> G[抓取公开岗位页面]
     G --> H[解析岗位信息]
-    H --> I[岗位关键词与城市筛选]
+    H --> H1[岗位质量评分]
+    H1 --> H2[岗位去重并保留更完整版本]
+    H2 --> I[岗位关键词与城市筛选]
     I --> J[进入批量岗位匹配工作流]
     J --> K[岗位评分排序]
     K --> L[生成简历优化建议]
@@ -179,6 +181,8 @@ flowchart TD
 | Robots Checker | 岗位列表 URL | 请求 robots.txt；拒绝或网络失败时安全跳过 | 允许状态与原因 |
 | Public Web Source | 公开静态 HTML 页面 | 带 User-Agent 和超时请求，解析岗位链接/文本并写入一小时缓存 | `List[CrawledJob]` |
 | Job Crawler Agent | 来源列表、最大岗位数 | 对来源逐一检查、至少间隔 1 秒访问，单个来源失败不影响其他来源 | `List[CrawlResult]` |
+| Job Quality Scorer | `List[CrawledJob]` | 按字段完整度、JD 长度、技能词和来源信息计算 0-100 分及 warning | 带质量字段的岗位列表 |
+| Job Deduplicator | 带质量字段的岗位列表 | 按 URL 或公司+岗位+城市分组，保留更完整且 JD 更长的版本 | `JobDeduplicationResult` |
 | Job Filter Agent | 抓取岗位、方向/城市/类型/关键词 | 优先保留偏好匹配岗位，过滤明显不相关内容 | `JobFilterResult` |
 | Crawl Workflow | 简历、偏好、来源配置或 Demo 数据 | 将筛选岗位转换为 `JobPosting` 并调用 V2 | `CrawlWorkflowResult` |
 
@@ -191,3 +195,12 @@ flowchart TD
 - 页面请求设置超时、5 MB 响应上限、最大岗位数量、来源间隔和缓存。
 - 每条结果保留 `source_url`；过短岗位内容标记为“JD 信息不足”。
 - Demo 模式读取本地 JSON，不发起任何网络请求。
+
+### V3.1 质量与去重说明
+
+1. 原始岗位先计算质量分，不会因为低分被直接删除。
+2. 去重优先使用规范化后的 `source_url`；链接缺失时使用 `company + job_title + city`。
+3. 重复组保留字段更完整、JD 更长的版本，并在保留记录上写入 `duplicate_group` 和 `is_duplicate`。
+4. 质量分由岗位名称、公司、城市、JD 长度、技能关键词、来源链接和发布日期组成。
+5. 质量标签分为高、中、低；低质量记录在页面标记为“低置信度”。
+6. 工作流统计原始数量、去重后数量、筛选后数量、三档质量数量、robots 跳过来源和抓取失败来源。

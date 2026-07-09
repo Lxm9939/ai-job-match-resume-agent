@@ -105,6 +105,12 @@ class JobPosting(BaseModel):
     jd_text: str
     source_url: str = ""
     publish_date: str = ""
+    quality_score: int = 0
+    quality_label: str = ""
+    quality_warnings: List[str] = Field(default_factory=list)
+    duplicate_group: str = ""
+    is_duplicate: bool = False
+    jd_length: int = 0
 
 
 class JobPreferences(BaseModel):
@@ -177,6 +183,12 @@ class CrawledJob(BaseModel):
     crawled_at: str = ""
     source_name: str = ""
     jd_quality: str = "正常"
+    quality_score: int = 0
+    quality_label: str = ""
+    quality_warnings: List[str] = Field(default_factory=list)
+    duplicate_group: str = ""
+    is_duplicate: bool = False
+    jd_length: int = 0
 
 
 class CrawlResult(BaseModel):
@@ -202,10 +214,31 @@ class JobFilterResult(BaseModel):
     filter_reason_summary: str = ""
 
 
+class JobDeduplicationResult(BaseModel):
+    jobs: List[CrawledJob] = Field(default_factory=list)
+    input_count: int = 0
+    output_count: int = 0
+    duplicate_count: int = 0
+    duplicate_group_count: int = 0
+
+
+class CrawlStatistics(BaseModel):
+    raw_job_count: int = 0
+    deduplicated_job_count: int = 0
+    filtered_job_count: int = 0
+    high_quality_count: int = 0
+    medium_quality_count: int = 0
+    low_quality_count: int = 0
+    robots_skipped_source_count: int = 0
+    failed_source_count: int = 0
+
+
 class CrawlWorkflowResult(BaseModel):
     crawl_results: List[CrawlResult] = Field(default_factory=list)
     raw_jobs: List[CrawledJob] = Field(default_factory=list)
+    deduplication: JobDeduplicationResult = Field(default_factory=JobDeduplicationResult)
     filter_result: JobFilterResult = Field(default_factory=JobFilterResult)
+    statistics: CrawlStatistics = Field(default_factory=CrawlStatistics)
     batch_result: BatchMatchResult
     source_count: int = 0
     skipped_source_count: int = 0

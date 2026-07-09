@@ -556,11 +556,22 @@ def render_crawl_mode() -> None:
         return
 
     st.markdown("### 抓取状态")
+    statistics = result.statistics
     status_cols = st.columns(4)
-    status_cols[0].metric("处理岗位源", result.source_count)
-    status_cols[1].metric("跳过/失败来源", result.skipped_source_count)
-    status_cols[2].metric("原始岗位", len(result.raw_jobs))
-    status_cols[3].metric("筛选后岗位", len(result.filter_result.filtered_jobs))
+    status_cols[0].metric("原始抓取数量", statistics.raw_job_count)
+    status_cols[1].metric("去重后数量", statistics.deduplicated_job_count)
+    status_cols[2].metric("筛选后数量", statistics.filtered_job_count)
+    status_cols[3].metric("高质量岗位", statistics.high_quality_count)
+    quality_cols = st.columns(4)
+    quality_cols[0].metric("中质量岗位", statistics.medium_quality_count)
+    quality_cols[1].metric("低质量岗位", statistics.low_quality_count)
+    quality_cols[2].metric("robots 跳过来源", statistics.robots_skipped_source_count)
+    quality_cols[3].metric("抓取失败来源", statistics.failed_source_count)
+    st.caption(
+        f"处理岗位源 {result.source_count} 个；发现重复岗位 "
+        f"{result.deduplication.duplicate_count} 条，涉及 "
+        f"{result.deduplication.duplicate_group_count} 个重复组。"
+    )
     if result.demo_mode:
         st.info("当前使用本地示例抓取结果，没有发起网络请求。")
     st.caption(result.filter_result.filter_reason_summary)
@@ -602,8 +613,14 @@ def render_crawl_mode() -> None:
             "岗位类型": job.job_type,
             "来源": job.source_name,
             "来源链接": job.source_url,
-            "JD 长度": len(job.jd_text),
-            "JD 质量": job.jd_quality,
+            "quality_score": job.quality_score,
+            "quality_label": (
+                "低（低置信度）" if job.quality_label == "低" else job.quality_label
+            ),
+            "quality_warnings": "；".join(job.quality_warnings),
+            "duplicate_group": job.duplicate_group,
+            "is_duplicate": job.is_duplicate,
+            "jd_length": job.jd_length,
         }
         for job in result.filter_result.filtered_jobs
     ]
@@ -644,6 +661,11 @@ def render_crawl_mode() -> None:
             "城市": item.job.city,
             "匹配总分": item.total_score,
             "推荐结论": item.recommendation,
+            "岗位质量标签": (
+                "低（低置信度）"
+                if item.job.quality_label == "低"
+                else item.job.quality_label
+            ),
             "来源链接": item.job.source_url,
         }
         for rank, item in enumerate(batch_result.ranked_jobs, start=1)
@@ -673,6 +695,11 @@ def render_crawl_mode() -> None:
         item for item in batch_result.ranked_jobs if item.job.job_id == selected_job_id
     )
     st.info(f"{selected.recommendation}。来源：{selected.job.source_url}")
+    if selected.job.quality_label == "低":
+        st.warning(
+            "该岗位为低置信度抓取结果，请先核对来源页再使用分析结论。"
+            f"质量提示：{'；'.join(selected.job.quality_warnings) or '岗位字段不完整'}"
+        )
     tabs = st.tabs(
         [
             "JD 解析",

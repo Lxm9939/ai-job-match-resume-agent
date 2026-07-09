@@ -85,3 +85,12 @@ def test_demo_crawl_enters_batch_matching_workflow() -> None:
     assert result.batch_result.ranked_jobs
     assert all(item.job.source_url.startswith("https://") for item in result.batch_result.ranked_jobs)
     assert all(item.recommendation for item in result.batch_result.ranked_jobs)
+    assert result.statistics.raw_job_count == len(result.raw_jobs)
+    assert result.statistics.deduplicated_job_count == result.deduplication.output_count
+    assert result.statistics.filtered_job_count == len(result.filter_result.filtered_jobs)
+    quality_total = (
+        result.statistics.high_quality_count
+        + result.statistics.medium_quality_count
+        + result.statistics.low_quality_count
+    )
+    assert quality_total == result.statistics.filtered_job_count

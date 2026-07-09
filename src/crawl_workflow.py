@@ -9,11 +9,14 @@ from typing import List, Optional
 from src.agents.job_crawler_agent import JobCrawlerAgent
 from src.agents.job_filter_agent import JobFilterAgent
 from src.batch_workflow import BatchMatchWorkflow
+from src.job_sources.job_deduplicator import JobDeduplicator
+from src.job_sources.job_quality import JobQualityScorer
 from src.job_sources.source_config import DEFAULT_SOURCE_CONFIG, load_job_sources
 from src.llm_client import LLMClient
 from src.schemas.models import (
     CrawledJob,
     CrawlResult,
+    CrawlStatistics,
     CrawlWorkflowResult,
     JobPosting,
     JobPreferences,
@@ -35,10 +38,14 @@ class CrawlWorkflow:
         *,
         crawler_agent: Optional[JobCrawlerAgent] = None,
         filter_agent: Optional[JobFilterAgent] = None,
+        deduplicator: Optional[JobDeduplicator] = None,
+        quality_scorer: Optional[JobQualityScorer] = None,
     ) -> None:
         self.llm_client = llm_client or LLMClient()
         self.crawler_agent = crawler_agent or JobCrawlerAgent()
         self.filter_agent = filter_agent or JobFilterAgent()
+        self.deduplicator = deduplicator or JobDeduplicator()
+        self.quality_scorer = quality_scorer or JobQualityScorer()
         self.batch_workflow = BatchMatchWorkflow(self.llm_client)
 
     def run(
@@ -60,12 +67,15 @@ class CrawlWorkflow:
                 raise ValueError("岗位源配置为空，请添加公开 Careers 页面或使用示例抓取结果。")
             crawl_results = self.crawler_agent.run(sources, preference)
 
-        raw_jobs = [
-            job
-            for result in crawl_results
-            for job in result.jobs
-        ][: max(1, preference.max_jobs)]
-        filter_result = self.filter_agent.run(raw_jobs, preference)
+        raw_jobs = self.quality_scorer.score_jobs(
+            [
+                job
+                for result in crawl_results
+                for job in result.jobs
+            ][: max(1, preference.max_jobs)]
+        )
+        deduplication = self.deduplicator.run(raw_jobs)
+        filter_result = self.filter_agent.run(deduplication.jobs, preference)
         if not filter_result.filtered_jobs:
             raise ValueError(
                 "没有抓取到符合条件的岗位。请检查公开来源配置和筛选条件，"
@@ -93,14 +103,54 @@ class CrawlWorkflow:
                 if result.skipped_reason or result.error_message
             ]
         )
+        statistics = self._build_statistics(
+            crawl_results,
+            raw_jobs,
+            deduplication.output_count,
+            filter_result.filtered_jobs,
+        )
         return CrawlWorkflowResult(
             crawl_results=crawl_results,
             raw_jobs=raw_jobs,
+            deduplication=deduplication,
             filter_result=filter_result,
+            statistics=statistics,
             batch_result=batch_result,
             source_count=len(crawl_results),
             skipped_source_count=skipped_count,
             demo_mode=use_demo,
+        )
+
+    def _build_statistics(
+        self,
+        crawl_results: List[CrawlResult],
+        raw_jobs: List[CrawledJob],
+        deduplicated_count: int,
+        filtered_jobs: List[CrawledJob],
+    ) -> CrawlStatistics:
+        return CrawlStatistics(
+            raw_job_count=len(raw_jobs),
+            deduplicated_job_count=deduplicated_count,
+            filtered_job_count=len(filtered_jobs),
+            high_quality_count=len(
+                [job for job in filtered_jobs if job.quality_label == "高"]
+            ),
+            medium_quality_count=len(
+                [job for job in filtered_jobs if job.quality_label == "中"]
+            ),
+            low_quality_count=len(
+                [job for job in filtered_jobs if job.quality_label == "低"]
+            ),
+            robots_skipped_source_count=len(
+                [
+                    result
+                    for result in crawl_results
+                    if "robots" in result.skipped_reason.lower()
+                ]
+            ),
+            failed_source_count=len(
+                [result for result in crawl_results if result.error_message]
+            ),
         )
 
     def _load_demo_results(self, max_jobs: int) -> List[CrawlResult]:
@@ -136,4 +186,10 @@ class CrawlWorkflow:
             jd_text=jd_text,
             source_url=job.source_url,
             publish_date=job.publish_date,
+            quality_score=job.quality_score,
+            quality_label=job.quality_label,
+            quality_warnings=job.quality_warnings,
+            duplicate_group=job.duplicate_group,
+            is_duplicate=job.is_duplicate,
+            jd_length=job.jd_length,
         )
