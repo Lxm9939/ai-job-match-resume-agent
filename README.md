@@ -3,9 +3,9 @@
 [![Test](https://github.com/Lxm9939/ai-job-match-resume-agent/actions/workflows/test.yml/badge.svg)](https://github.com/Lxm9939/ai-job-match-resume-agent/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-一个基于 **Streamlit + 多 Agent 工作流** 的秋招求职辅助项目。它不是简单的“LLM 简历改写器”，而是把 JD 解析、简历证据抽取、关键词覆盖、可解释评分、简历优化建议和投递话术生成拆成多个可追踪的 Agent 节点，帮助候选人更系统地完成岗位适配分析。
+一个基于 **Streamlit + 多 Agent 工作流** 的秋招求职辅助项目。它不是简单的“LLM 简历改写器”，而是把 JD 解析、简历证据抽取、关键词覆盖、可解释评分、简历优化建议、面试准备和投递话术生成拆成多个可追踪的 Agent 节点，帮助候选人更系统地完成岗位适配分析。
 
-用户可以上传简历或粘贴简历文本，再粘贴岗位 JD。系统会输出结构化匹配分析、简历优化建议、多渠道投递话术，并支持 Markdown / Word 报告导出。没有 API Key 时也可以使用 mock 模式本地演示。
+项目同时保留 **V1 单 JD 深度分析** 和 **V2 批量岗位匹配推荐**。用户既可以针对一个岗位生成完整分析，也可以导入 CSV / Excel 岗位列表或粘贴多个 JD，获得岗位排序、逐岗位简历优化和面试准备建议。没有 API Key 时也可以使用 mock 模式本地演示。
 
 ## 项目背景
 
@@ -18,7 +18,9 @@
 
 本项目把这些环节拆成可解释的 Agent 工作流，用一个可运行的网页 MVP 帮助候选人快速完成“JD 理解 - 简历匹配 - 优化建议 - 投递表达”的闭环。
 
-## 核心功能
+## V1 / V2 功能
+
+### V1：单个 JD 匹配分析
 
 - JD 解析：提取岗位名称、公司、地点、职责、硬技能、软技能、工具栈、业务关键词、学历要求、经验要求和隐含能力。
 - 简历解析：提取教育背景、项目经历、实习经历、技能栈、成果指标、关键词和可迁移能力。
@@ -29,9 +31,21 @@
 - 多渠道投递话术生成：生成 Boss 直聘打招呼、邮件正文、LinkedIn 私信、内推请求和面试自我介绍初稿。
 - Markdown / Word 报告导出：支持下载 `.md` 和 `.docx` 分析报告。
 
+### V2：批量岗位匹配推荐
+
+- 支持上传 CSV / Excel 岗位列表，或使用 `---JOB---` 分隔粘贴多个 JD。
+- 支持填写目标岗位方向、城市、岗位类型和公司偏好。
+- 复用 V1 Agent 对每个岗位执行证据匹配、关键词覆盖和五维评分。
+- 按匹配总分降序生成岗位排行榜和分档投递建议。
+- 为每个岗位生成针对性简历优化、投递话术和面试准备清单。
+- 支持下载批量 Markdown 匹配报告。
+- 不抓取需要登录或受反爬限制的招聘平台，当前由用户主动导入岗位数据。
+
 ## Agent 工作流图
 
 查看 Agent 输出样例：[docs/agent_outputs.md](docs/agent_outputs.md)
+
+### V1 单 JD 工作流
 
 ```mermaid
 flowchart TD
@@ -50,6 +64,28 @@ flowchart TD
     K --> M[最终报告生成 Agent]
     L --> M
     M --> N[输出匹配报告、简历建议、投递话术]
+```
+
+### V2 批量岗位工作流
+
+```mermaid
+flowchart TD
+    A[上传简历 / 粘贴简历文本] --> B[解析简历能力画像]
+    B --> C[输入目标岗位方向 / 城市 / 偏好]
+    C --> D[上传岗位 CSV/Excel 或粘贴多个 JD]
+    D --> E[岗位列表解析 Agent]
+    E --> F[批量 JD 解析]
+    F --> G[逐个岗位证据匹配]
+    G --> H[逐个岗位关键词覆盖]
+    H --> I[逐个岗位匹配评分]
+    I --> J[岗位推荐排序]
+    J --> K[选择岗位查看详情]
+    K --> L[生成针对性简历优化建议]
+    K --> M[生成面试注意事项]
+    K --> N[生成投递话术]
+    L --> O[导出批量匹配报告]
+    M --> O
+    N --> O
 ```
 
 ## 页面截图
@@ -81,6 +117,7 @@ ai-job-match-resume-agent/
 │   ├── document_parser.py
 │   ├── report_exporter.py
 │   ├── workflow.py
+│   ├── batch_workflow.py
 │   ├── agents/
 │   ├── schemas/
 │   └── utils/
@@ -92,9 +129,12 @@ ai-job-match-resume-agent/
 │   └── screenshots/
 ├── examples/
 │   ├── sample_resume.txt
-│   └── sample_jd.txt
+│   ├── sample_jd.txt
+│   └── sample_jobs.csv
 └── tests/
-    └── test_workflow.py
+    ├── test_workflow.py
+    ├── test_job_list_parser.py
+    └── test_batch_workflow.py
 ```
 
 ## 快速开始
@@ -141,6 +181,8 @@ APP_DEBUG=false
 
 - Mock 模式是本地规则和关键词库驱动，适合演示产品流程，但不等同于真实 LLM 的语义理解能力。
 - 匹配评分是可解释的启发式评分，用于定位优势和短板，不应被当作真实招聘结果或录用概率。
+- 批量排行当前按五维匹配总分排序，求职偏好作为结果解释信息，不代表招聘平台推荐算法。
+- 当前不会自动抓取 Boss 直聘、智联招聘等平台，岗位数据需通过 CSV / Excel 或文本导入。
 - 简历优化建议遵循“不编造经历”的原则；用户需要自行确认所有项目、工具、指标和结果都真实发生过。
 - 上传或粘贴真实简历前，应注意隐私保护；如果使用 OpenAI 模式，请确认自己接受相应 API 的数据处理方式。
 
@@ -154,15 +196,18 @@ pytest
 
 - mock 模式端到端 Agent 工作流。
 - `.docx` Word 报告导出是否生成有效 Word 文件。
+- CSV 岗位列表解析、多 JD 文本拆分和缺失字段兜底。
+- 批量岗位结果数量、降序排序、推荐结论和面试准备输出。
 
 GitHub Actions 会在 `push` 和 `pull_request` 时自动运行 pytest。
 
 ## Future Work / 后续迭代
 
 - 在线部署：部署到 Streamlit Community Cloud、Hugging Face Spaces 或其他平台。
-- 批量 JD 匹配：一次输入多个 JD，输出岗位匹配排序。
 - 多版本简历对比：比较不同简历版本在同一 JD 下的匹配差异。
 - 岗位关键词库：为 AI 产品、数据分析、商业分析、数据产品等方向维护专属关键词库和评分策略。
+- 公开招聘源适配：为公司官网或公开招聘页提供可配置的轻量导入器。
+- 批量 Word 导出：将 V2 排行榜与逐岗位建议导出为 `.docx`。
 
 ## License
 

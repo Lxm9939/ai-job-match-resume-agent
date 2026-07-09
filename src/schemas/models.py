@@ -93,3 +93,64 @@ class WorkflowResult(BaseModel):
     outreach: OutreachMessages
     final_report: FinalReport
 
+
+class JobPosting(BaseModel):
+    """A normalized job posting imported from tabular data or pasted text."""
+
+    job_id: str
+    job_title: str = "未知岗位"
+    company: str = "公司未知"
+    city: str = "城市未知"
+    job_type: str = "岗位类型未知"
+    jd_text: str
+    source_url: str = ""
+    publish_date: str = ""
+
+
+class JobPreferences(BaseModel):
+    """User preferences used to explain and contextualize batch ranking."""
+
+    target_role: str = ""
+    target_city: str = ""
+    job_type: str = ""
+    company_preference: str = ""
+
+
+class InterviewPrep(BaseModel):
+    likely_questions: List[str] = Field(default_factory=list)
+    project_talking_points: List[str] = Field(default_factory=list)
+    technical_preparation: List[str] = Field(default_factory=list)
+    business_preparation: List[str] = Field(default_factory=list)
+    risk_questions: List[str] = Field(default_factory=list)
+    suggested_answer_strategy: List[str] = Field(default_factory=list)
+
+
+class JobMatchResult(BaseModel):
+    job: JobPosting
+    total_score: float = 0.0
+    skill_score: float = 0.0
+    project_score: float = 0.0
+    keyword_score: float = 0.0
+    responsibility_score: float = 0.0
+    education_score: float = 0.0
+    strengths: List[str] = Field(default_factory=list)
+    risks: List[str] = Field(default_factory=list)
+    missing_keywords: List[str] = Field(default_factory=list)
+    recommendation: str = ""
+    evidence_matches: List[EvidenceMatch] = Field(default_factory=list)
+    optimization_suggestions: List[OptimizationSuggestion] = Field(default_factory=list)
+    interview_prep: InterviewPrep = Field(default_factory=InterviewPrep)
+    outreach_messages: OutreachMessages = Field(default_factory=OutreachMessages)
+    jd_analysis: JDAnalysis = Field(default_factory=JDAnalysis)
+    keyword_coverage: KeywordCoverage = Field(default_factory=KeywordCoverage)
+    score_breakdown: ScoreBreakdown = Field(default_factory=ScoreBreakdown)
+
+
+class BatchMatchResult(BaseModel):
+    resume_summary: str = ""
+    preference_summary: str = ""
+    ranked_jobs: List[JobMatchResult] = Field(default_factory=list)
+    best_matches: List[JobMatchResult] = Field(default_factory=list)
+    risky_matches: List[JobMatchResult] = Field(default_factory=list)
+    final_summary: str = ""
+    report_markdown: str = ""

@@ -340,3 +340,114 @@ Boss 直聘：
 3. 强调安全边界：无 API Key 可 mock 演示，真实 API Key 只走 `.env`，不提交到 GitHub。
 4. 强调真实性：简历优化 Agent 不编造经历，只基于原始简历做表达优化。
 5. 最后讲工程化：Pydantic schema、pytest、GitHub Actions、Markdown/Word 报告导出。
+
+## V2 新增 Agent 输出样例
+
+V2 在上述 8 个 Agent 之外增加岗位列表解析、批量匹配和面试准备三个 Agent。它们不替换 V1，而是把单岗位分析能力组合成批量推荐流程。
+
+### 9. Job List Parser Agent
+
+**Agent 目标**
+
+把 CSV、Excel 或使用 `---JOB---` 分隔的多段 JD 统一为可批处理的岗位对象，并对缺失字段做局部兜底。
+
+**输入字段**
+
+- 文件名与文件字节，或多 JD 文本。
+- 表格建议字段：`job_title`、`company`、`city`、`job_type`、`jd_text`、`source_url`、`publish_date`。
+
+**输出字段**
+
+- `List[JobPosting]`
+- 每个岗位包含稳定的 `job_id` 和规范化岗位字段。
+
+**示例输出**
+
+```json
+{
+  "job_id": "job-001",
+  "job_title": "AI 产品经理",
+  "company": "星云智能科技",
+  "city": "北京",
+  "job_type": "校招",
+  "jd_text": "参与大模型产品需求调研、PRD 编写和 Agent 功能上线……",
+  "source_url": "https://careers.example.com/jobs/ai-pm-001",
+  "publish_date": "2026-07-01"
+}
+```
+
+**为什么有价值**
+
+真实岗位数据格式并不统一。先做输入标准化，可以让后续 Agent 只关心匹配任务；某个岗位缺少公司或城市时，也不会导致整批分析失败。
+
+### 10. Batch Matching Agent
+
+**Agent 目标**
+
+复用 V1 单 JD Agent，对多个岗位逐一生成证据、关键词和五维评分，并按总分降序输出推荐结果。
+
+**输入字段**
+
+- `ResumeAnalysis`
+- `List[JobPosting]`
+- 目标岗位方向
+
+**输出字段**
+
+- `List[JobMatchResult]`
+- 总分与五项分数、优势、风险、缺失关键词、推荐结论。
+- 逐岗位证据、优化建议、面试准备和投递话术。
+
+**示例输出**
+
+```json
+{
+  "job": {"job_title": "AI Agent 产品助理", "company": "启元 AI 实验室"},
+  "total_score": 72.4,
+  "skill_score": 75.0,
+  "project_score": 68.0,
+  "keyword_score": 70.0,
+  "recommendation": "建议投递，可针对性优化简历",
+  "missing_keywords": ["RAG", "模型效果评估"]
+}
+```
+
+**为什么有价值**
+
+候选人面对多个岗位时，需要先决定投递优先级。批量匹配把同一评分口径应用到所有岗位，减少凭感觉筛选，也保留每个分数的证据来源。
+
+### 11. Interview Prep Agent
+
+**Agent 目标**
+
+根据 JD 要求、简历证据和匹配风险生成面试准备清单，不补写简历中不存在的经历。
+
+**输入字段**
+
+- `JDAnalysis`
+- `ResumeAnalysis`
+- `List[EvidenceMatch]`
+- `ScoreBreakdown`
+
+**输出字段**
+
+- `likely_questions`
+- `project_talking_points`
+- `technical_preparation`
+- `business_preparation`
+- `risk_questions`
+- `suggested_answer_strategy`
+
+**示例输出**
+
+```text
+可能问题：请结合真实项目说明你如何完成 AI Agent 工作流拆解。
+项目讲解：按背景、本人动作、工具、真实结果说明 Streamlit 原型。
+技术准备：复习 Prompt、RAG 和模型效果评估的基本概念。
+风险追问：简历对 RAG 的直接证据不足，可能被追问是否实际使用过。
+回答策略：明确说明没有完整落地 RAG，再介绍已完成的 Agent 工作流和学习计划。
+```
+
+**为什么有价值**
+
+匹配分析只有转化为面试准备才真正进入求职下一阶段。这个 Agent 把强证据变成项目讲解重点，把弱证据变成风险预案，并持续强调诚实表达边界。

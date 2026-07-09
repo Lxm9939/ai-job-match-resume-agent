@@ -26,9 +26,11 @@ Thumbs.db
 
 # Generated local outputs
 outputs/
+tmp/
 *.log
 *.tmp
 *.bak
 ~$*
 job_match_report.md
 job_match_report.docx
+batch_job_match_report.md
