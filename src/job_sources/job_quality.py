@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from typing import List
-from urllib.parse import urlparse
 
 from src.schemas.models import CrawledJob
+from src.url_utils import is_clickable_job_url
 from src.utils.text_utils import (
     BUSINESS_KEYWORDS,
     HARD_SKILLS,
@@ -57,8 +57,13 @@ class JobQualityScorer:
         else:
             warnings.append("未识别技能关键词")
 
-        if self._valid_url(job.source_url):
+        if is_clickable_job_url(job.source_url, job.source_url_status):
             score += 15
+        elif job.source_url_status == "demo_data":
+            warnings.append("示例数据无真实链接")
+        elif job.source_url_status == "fallback":
+            score += 8
+            warnings.append("使用岗位列表页作为来源")
         else:
             warnings.append("来源链接缺失")
 
@@ -95,8 +100,3 @@ class JobQualityScorer:
     def _known(self, value: str, unknown_markers: tuple[str, ...]) -> bool:
         value = value.strip()
         return bool(value) and not any(marker in value for marker in unknown_markers)
-
-    def _valid_url(self, value: str) -> bool:
-        parsed = urlparse(value.strip())
-        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-

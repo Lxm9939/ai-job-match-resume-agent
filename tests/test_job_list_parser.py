@@ -24,7 +24,8 @@ def test_parse_sample_jobs_csv() -> None:
     assert len(jobs) == 5
     assert jobs[0].job_title == "AI 产品经理"
     assert jobs[0].jd_text
-    assert jobs[0].source_url.startswith("https://")
+    assert jobs[0].source_url == ""
+    assert jobs[0].source_url_status == "demo_data"
 
 
 def test_parse_excel_job_list() -> None:
@@ -75,3 +76,20 @@ def test_empty_job_list_returns_empty_result() -> None:
 
     assert parser.parse_dataframe(pd.DataFrame()) == []
     assert parser.run() == []
+
+
+def test_placeholder_source_url_is_marked_as_demo_data() -> None:
+    dataframe = pd.DataFrame(
+        [
+            {
+                "job_title": "AI 产品经理",
+                "jd_text": "负责 AI Agent 产品需求分析、Prompt 测试和数据分析。",
+                "source_url": "https://careers.example.com/jobs/123",
+            }
+        ]
+    )
+
+    jobs = mock_parser().parse_dataframe(dataframe)
+
+    assert jobs[0].source_url_status == "demo_data"
+    assert "示例数据" in jobs[0].source_url_note

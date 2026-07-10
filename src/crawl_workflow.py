@@ -11,9 +11,14 @@ from src.agents.job_filter_agent import JobFilterAgent
 from src.batch_workflow import BatchMatchWorkflow
 from src.job_sources.job_deduplicator import JobDeduplicator
 from src.job_sources.job_quality import JobQualityScorer
-from src.job_sources.source_config import DEFAULT_SOURCE_CONFIG, load_job_sources
+from src.job_sources.source_config import (
+    DEFAULT_SOURCE_CONFIG,
+    build_custom_url_sources,
+    load_job_sources,
+)
 from src.llm_client import LLMClient
 from src.schemas.models import (
+    BatchMatchResult,
     CrawledJob,
     CrawlResult,
     CrawlStatistics,
@@ -55,6 +60,8 @@ class CrawlWorkflow:
         preference: JobSearchPreference,
         use_demo: bool = True,
         source_config_content: Optional[bytes] = None,
+        selected_source_names: Optional[List[str]] = None,
+        custom_urls: Optional[List[str]] = None,
     ) -> CrawlWorkflowResult:
         if use_demo:
             crawl_results = self._load_demo_results(preference.max_jobs)
@@ -63,6 +70,10 @@ class CrawlWorkflow:
                 content=source_config_content,
                 path=None if source_config_content is not None else DEFAULT_SOURCE_CONFIG,
             )
+            if selected_source_names is not None:
+                selected = set(selected_source_names)
+                sources = [source for source in sources if source.source_name in selected]
+            sources.extend(build_custom_url_sources(custom_urls or []))
             if not sources:
                 raise ValueError("岗位源配置为空，请添加公开 Careers 页面或使用示例抓取结果。")
             crawl_results = self.crawler_agent.run(sources, preference)
@@ -77,9 +88,35 @@ class CrawlWorkflow:
         deduplication = self.deduplicator.run(raw_jobs)
         filter_result = self.filter_agent.run(deduplication.jobs, preference)
         if not filter_result.filtered_jobs:
-            raise ValueError(
-                "没有抓取到符合条件的岗位。请检查公开来源配置和筛选条件，"
-                "或切换到 V2 上传 CSV/Excel 岗位列表。"
+            skipped_count = len(
+                [
+                    result
+                    for result in crawl_results
+                    if result.skipped_reason or result.error_message
+                ]
+            )
+            statistics = self._build_statistics(
+                crawl_results,
+                raw_jobs,
+                deduplication.output_count,
+                filter_result.filtered_jobs,
+            )
+            return CrawlWorkflowResult(
+                crawl_results=crawl_results,
+                raw_jobs=raw_jobs,
+                deduplication=deduplication,
+                filter_result=filter_result,
+                statistics=statistics,
+                batch_result=BatchMatchResult(
+                    final_summary=(
+                        "没有抓取到符合条件的岗位。请检查公开来源配置和筛选条件，"
+                        "或切换到 V2 上传 CSV/Excel 岗位列表。"
+                    ),
+                    report_markdown="# 公开岗位抓取结果\n\n没有抓取到符合条件的岗位。",
+                ),
+                source_count=len(crawl_results),
+                skipped_source_count=skipped_count,
+                demo_mode=use_demo,
             )
 
         job_postings = [
@@ -146,11 +183,18 @@ class CrawlWorkflow:
                 [
                     result
                     for result in crawl_results
-                    if "robots" in result.skipped_reason.lower()
+                    if result.source_access_status == "robots_disallowed"
+                    or "robots" in result.skipped_reason.lower()
                 ]
             ),
             failed_source_count=len(
-                [result for result in crawl_results if result.error_message]
+                [
+                    result
+                    for result in crawl_results
+                    if result.error_message
+                    or result.source_access_status
+                    in {"login_required", "captcha_or_blocked", "http_error", "parse_failed", "unknown"}
+                ]
             ),
         )
 
@@ -161,16 +205,33 @@ class CrawlWorkflow:
             source_id="demo_crawled_jobs",
             source_name="V3 示例抓取结果",
             source_type="public_html",
-            base_url="https://careers.example.com",
-            list_url="https://careers.example.com/jobs",
+            base_url="",
+            list_url="",
             allowed=True,
             notes="本地 Demo 数据，不发起网络请求。",
+            source_access_status="demo_data",
+            source_access_note="示例数据，无真实岗位链接",
         )
+        jobs = [
+            job.model_copy(
+                update={
+                    "source_url": "",
+                    "source_url_status": "demo_data",
+                    "source_url_note": "示例数据，无真实岗位链接",
+                    "source_access_status": "demo_data",
+                    "source_access_note": "本地 Demo 数据，不发起网络请求。",
+                }
+            )
+            for job in jobs
+        ]
         return [
             CrawlResult(
                 source=source,
                 jobs=jobs,
                 crawled_count=len(jobs),
+                source_access_status="demo_data",
+                source_access_note="本地 Demo 数据，不发起网络请求。",
+                entered_parser=False,
             )
         ]
 
@@ -186,6 +247,10 @@ class CrawlWorkflow:
             job_type=job.job_type,
             jd_text=jd_text,
             source_url=job.source_url,
+            source_url_status=job.source_url_status,
+            source_url_note=job.source_url_note,
+            source_access_status=job.source_access_status,
+            source_access_note=job.source_access_note,
             publish_date=job.publish_date,
             quality_score=job.quality_score,
             quality_label=job.quality_label,

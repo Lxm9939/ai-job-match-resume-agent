@@ -12,6 +12,7 @@ import pandas as pd
 from src.agents.jd_parser_agent import JDParserAgent
 from src.llm_client import LLMClient
 from src.schemas.models import JobPosting
+from src.url_utils import normalize_url, source_url_status
 from src.utils.text_utils import normalize_text
 
 
@@ -25,6 +26,10 @@ class JobListParserAgent:
         "job_type": ("job_type", "岗位类型", "职位类型"),
         "jd_text": ("jd_text", "jd", "岗位描述", "职位描述", "岗位jd"),
         "source_url": ("source_url", "url", "来源链接", "岗位链接"),
+        "source_url_status": ("source_url_status", "链接状态"),
+        "source_url_note": ("source_url_note", "链接说明"),
+        "source_access_status": ("source_access_status", "访问状态"),
+        "source_access_note": ("source_access_note", "访问说明"),
         "publish_date": ("publish_date", "发布日期", "发布时间"),
     }
 
@@ -79,6 +84,11 @@ class JobListParserAgent:
             jd_text = normalize_text(values["jd_text"])
             if not jd_text:
                 continue
+            source_url = normalize_url(values["source_url"])
+            url_status, url_note = source_url_status(
+                source_url or values["source_url"],
+                values["source_url_status"],
+            )
             jobs.append(
                 JobPosting(
                     job_id=f"job-{row_index:03d}",
@@ -87,7 +97,11 @@ class JobListParserAgent:
                     city=values["city"] or "城市未知",
                     job_type=values["job_type"] or "岗位类型未知",
                     jd_text=jd_text,
-                    source_url=values["source_url"],
+                    source_url=source_url,
+                    source_url_status=url_status,
+                    source_url_note=values["source_url_note"] or url_note,
+                    source_access_status=values["source_access_status"],
+                    source_access_note=values["source_access_note"],
                     publish_date=values["publish_date"],
                 )
             )
@@ -98,6 +112,8 @@ class JobListParserAgent:
         jobs: List[JobPosting] = []
         for index, block in enumerate((item for item in blocks if item), start=1):
             analysis = self.jd_parser.run(block)
+            source_url = normalize_url(self._extract_url(block))
+            url_status, url_note = source_url_status(source_url)
             jobs.append(
                 JobPosting(
                     job_id=f"job-{index:03d}",
@@ -106,7 +122,9 @@ class JobListParserAgent:
                     city=analysis.location or "城市未知",
                     job_type=self._extract_job_type(block),
                     jd_text=block,
-                    source_url=self._extract_url(block),
+                    source_url=source_url,
+                    source_url_status=url_status,
+                    source_url_note=url_note,
                     publish_date=self._extract_publish_date(block),
                 )
             )

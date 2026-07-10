@@ -14,6 +14,7 @@ from src.schemas.models import (
     JobPreferences,
     ResumeAnalysis,
 )
+from src.url_utils import format_url_for_display, source_url_status
 from src.utils.text_utils import dedupe_keep_order, markdown_table, normalize_text
 
 
@@ -211,6 +212,16 @@ class BatchMatchWorkflow:
         return "\n".join(sections)
 
     def _job_detail_markdown(self, rank: int, result: JobMatchResult) -> List[str]:
+        link_status, link_note = source_url_status(
+            result.job.source_url,
+            result.job.source_url_status,
+        )
+        link_note = result.job.source_url_note or link_note
+        link_display = (
+            "示例数据，无真实岗位链接"
+            if link_status == "demo_data"
+            else format_url_for_display(result.job.source_url)
+        )
         evidence_rows = [
             [
                 item.requirement,
@@ -231,7 +242,8 @@ class BatchMatchWorkflow:
             f"- 匹配总分：{result.total_score}/100",
             f"- 推荐结论：{result.recommendation}",
             f"- 城市/类型：{result.job.city} / {result.job.job_type}",
-            f"- 来源链接：{result.job.source_url or '未提供'}",
+            f"- 来源链接：{link_display}",
+            f"- 链接状态：{link_status}；{link_note}",
             f"- 已覆盖关键词：{'、'.join(result.keyword_coverage.covered_keywords) or '无'}",
             f"- 未覆盖关键词：{'、'.join(result.missing_keywords) or '无'}",
             "",

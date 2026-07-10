@@ -49,16 +49,17 @@ def test_robots_network_failure_fails_closed() -> None:
     assert "安全跳过" in decision.reason
 
 
-def test_prohibited_recruiting_platform_is_disabled_by_config_loader() -> None:
+def test_recruiting_platform_domain_is_not_disabled_by_config_loader() -> None:
     content = json.dumps(
         [
             {
-                "source_id": "blocked",
-                "source_name": "Blocked Platform",
+                "source_id": "boss_zhipin",
+                "source_name": "Boss 直聘",
                 "source_type": "public_html",
                 "base_url": "https://www.zhipin.com",
                 "list_url": "https://www.zhipin.com/jobs",
-                "allowed": True,
+                "enabled": True,
+                "access_policy": "public_only",
                 "notes": "",
             }
         ]
@@ -66,5 +67,5 @@ def test_prohibited_recruiting_platform_is_disabled_by_config_loader() -> None:
 
     source = load_job_sources(content=content)[0]
 
-    assert not source.allowed
-    assert "禁止抓取" in source.notes
+    assert source.allowed
+    assert "禁止抓取" not in source.notes

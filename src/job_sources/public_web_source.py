@@ -8,13 +8,13 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List, Optional
-from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup, Tag
 
 from src.job_sources.base import BaseJobSource, CRAWLER_USER_AGENT
 from src.schemas.models import CrawledJob, JobSearchPreference, JobSource
+from src.url_utils import normalize_url, source_url_status
 from src.utils.text_utils import dedupe_keep_order, normalize_text
 
 
@@ -37,6 +37,24 @@ ROLE_TERMS = [
     "ai",
     "agent",
 ]
+LOGIN_REQUIRED_TERMS = ["请登录", "登录后查看", "login required", "sign in"]
+CAPTCHA_OR_BLOCKED_TERMS = ["验证码", "captcha", "security check", "verify", "访问过于频繁"]
+
+
+class JobSourceAccessError(RuntimeError):
+    """Structured, UI-safe crawl/access error."""
+
+    def __init__(
+        self,
+        access_status: str,
+        access_note: str,
+        *,
+        entered_parser: bool = False,
+    ) -> None:
+        super().__init__(access_note)
+        self.access_status = access_status
+        self.access_note = access_note
+        self.entered_parser = entered_parser
 
 
 class PublicWebSource(BaseJobSource):
@@ -74,13 +92,39 @@ class PublicWebSource(BaseJobSource):
                 "Accept": "text/html,application/xhtml+xml",
             },
         )
-        response.raise_for_status()
+        status_code = getattr(response, "status_code", 200)
+        if status_code in {401, 403}:
+            raise JobSourceAccessError("login_required", f"HTTP {status_code}，页面可能需要登录")
+        if status_code == 429:
+            raise JobSourceAccessError("captcha_or_blocked", "HTTP 429，访问过于频繁或被限制")
+        if status_code < 200 or status_code >= 300:
+            raise JobSourceAccessError("http_error", f"HTTP {status_code}，已跳过")
         if len(response.content) > 5_000_000:
-            raise ValueError("页面超过 5 MB，已停止解析以避免过度下载。")
+            raise JobSourceAccessError("http_error", "页面超过 5 MB，已停止解析以避免过度下载。")
 
+        access_status, access_note = self._inspect_page(response.text)
+        if access_status != "public_accessible":
+            raise JobSourceAccessError(access_status, access_note)
         jobs = self._extract_jobs(response.text, source, preference, max_jobs)
+        if not jobs:
+            raise JobSourceAccessError(
+                "parse_failed",
+                "页面公开可访问，但未解析到岗位卡片或岗位文本",
+                entered_parser=True,
+            )
         self._write_cache(cache_path, jobs)
         return jobs
+
+    def _inspect_page(self, html: str) -> tuple[str, str]:
+        text = normalize_text(BeautifulSoup(html or "", "html.parser").get_text(" ", strip=True))
+        lower = text.lower()
+        if any(term.lower() in lower for term in LOGIN_REQUIRED_TERMS):
+            return "login_required", "页面包含登录后查看提示"
+        if any(term.lower() in lower for term in CAPTCHA_OR_BLOCKED_TERMS):
+            return "captcha_or_blocked", "页面包含验证码或访问限制提示"
+        if len(text) < 40:
+            return "parse_failed", "页面内容过短，无法提取岗位"
+        return "public_accessible", "公开 HTML 可访问，已进入解析"
 
     def _extract_jobs(
         self,
@@ -104,12 +148,28 @@ class PublicWebSource(BaseJobSource):
             context = normalize_text(context_node.get_text(" ", strip=True))
             if not self._looks_like_job(title, context, search_terms, link):
                 continue
-            source_url = urljoin(source.list_url, str(link.get("href", "")))
+            href = str(link.get("href", ""))
+            source_url = normalize_url(href, source.list_url or source.base_url)
+            status, note = source_url_status(source_url)
+            if not source_url and source.list_url:
+                source_url = source.list_url
+                status = "fallback"
+                note = "使用岗位列表页作为来源"
             key = (title.lower(), source_url.lower())
             if key in seen:
                 continue
             seen.add(key)
-            jobs.append(self._build_job(title, context, source_url, source, preference))
+            jobs.append(
+                self._build_job(
+                    title,
+                    context,
+                    source_url,
+                    source,
+                    preference,
+                    source_url_status_value=status,
+                    source_url_note=note,
+                )
+            )
             if len(jobs) >= max_jobs:
                 break
 
@@ -173,7 +233,17 @@ class PublicWebSource(BaseJobSource):
                 continue
             title_node = node.find(["h1", "h2", "h3", "h4", "strong"])
             title = normalize_text(title_node.get_text(" ", strip=True)) if title_node else text[:60]
-            jobs.append(self._build_job(title, text, source.list_url, source, preference))
+            jobs.append(
+                self._build_job(
+                    title,
+                    text,
+                    source.list_url,
+                    source,
+                    preference,
+                    source_url_status_value="fallback",
+                    source_url_note="使用岗位列表页作为来源",
+                )
+            )
             if len(jobs) >= max_jobs:
                 break
         return jobs
@@ -185,12 +255,16 @@ class PublicWebSource(BaseJobSource):
         source_url: str,
         source: JobSource,
         preference: JobSearchPreference,
+        *,
+        source_url_status_value: str = "",
+        source_url_note: str = "",
     ) -> CrawledJob:
         jd_text = context[:2500] or title
         quality = "正常"
         if len(jd_text) < 120:
             quality = "JD 信息不足"
             jd_text = f"JD 信息不足：{jd_text}"
+        status, inferred_note = source_url_status(source_url, source_url_status_value)
         return CrawledJob(
             job_title=title,
             company=self._company_name(source.source_name),
@@ -198,6 +272,10 @@ class PublicWebSource(BaseJobSource):
             job_type=self._detect_job_type(context),
             jd_text=jd_text,
             source_url=source_url,
+            source_url_status=status,
+            source_url_note=source_url_note or inferred_note,
+            source_access_status="public_accessible",
+            source_access_note="公开 HTML 可访问，已进入解析",
             publish_date=self._detect_date(context),
             crawled_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             source_name=source.source_name,

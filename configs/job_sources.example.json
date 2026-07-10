@@ -1,11 +1,142 @@
 [
   {
-    "source_id": "company_careers_demo",
-    "source_name": "Demo Company Careers",
+    "source_id": "boss_zhipin",
+    "source_name": "Boss 直聘",
     "source_type": "public_html",
-    "base_url": "https://example.com",
-    "list_url": "https://example.com/careers",
-    "allowed": true,
-    "notes": "示例配置，不代表真实岗位源；请替换为允许公开访问的公司官网 Careers 页面。"
+    "base_url": "https://www.zhipin.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "zhaopin",
+    "source_name": "智联招聘",
+    "source_type": "public_html",
+    "base_url": "https://www.zhaopin.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "liepin",
+    "source_name": "猎聘",
+    "source_type": "public_html",
+    "base_url": "https://www.liepin.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "51job",
+    "source_name": "前程无忧",
+    "source_type": "public_html",
+    "base_url": "https://www.51job.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "lagou",
+    "source_name": "拉勾",
+    "source_type": "public_html",
+    "base_url": "https://www.lagou.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "shixiseng",
+    "source_name": "实习僧",
+    "source_type": "public_html",
+    "base_url": "https://www.shixiseng.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "nowcoder_jobs",
+    "source_name": "牛客招聘",
+    "source_type": "public_html",
+    "base_url": "https://www.nowcoder.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "yingjiesheng",
+    "source_name": "应届生求职网",
+    "source_type": "public_html",
+    "base_url": "https://www.yingjiesheng.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "linkedin_jobs",
+    "source_name": "LinkedIn Jobs",
+    "source_type": "public_html",
+    "base_url": "https://www.linkedin.com",
+    "list_url_template": "https://www.linkedin.com/jobs/search/?keywords={keyword}&location={city}",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "indeed",
+    "source_name": "Indeed",
+    "source_type": "public_html",
+    "base_url": "https://www.indeed.com",
+    "list_url_template": "https://www.indeed.com/jobs?q={keyword}&l={city}",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "seek",
+    "source_name": "Seek",
+    "source_type": "public_html",
+    "base_url": "https://www.seek.com.au",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "gradconnection",
+    "source_name": "GradConnection",
+    "source_type": "public_html",
+    "base_url": "https://www.gradconnection.com",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "company_careers",
+    "source_name": "公司官网 Careers",
+    "source_type": "public_html",
+    "base_url": "",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
+  },
+  {
+    "source_id": "custom_public_url",
+    "source_name": "自定义公开 URL",
+    "source_type": "public_html",
+    "base_url": "",
+    "list_url_template": "",
+    "enabled": true,
+    "access_policy": "public_only",
+    "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
   }
 ]

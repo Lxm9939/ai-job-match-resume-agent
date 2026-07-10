@@ -7,6 +7,7 @@ from collections import Counter
 from typing import Any, Dict, Iterable, List, Sequence
 
 from src.schemas.models import BatchMatchResult, JobMatchResult
+from src.url_utils import format_url_for_display, is_clickable_job_url, source_url_status
 from src.utils.text_utils import dedupe_keep_order, markdown_table
 
 
@@ -83,25 +84,46 @@ def build_ranking_rows(matches: Sequence[JobMatchResult]) -> List[Dict[str, Any]
     """Return full ranking rows shared by dashboard CSV exports."""
 
     sorted_matches = sorted(matches, key=lambda item: item.total_score, reverse=True)
-    return [
-        {
-            "rank": rank,
-            "job_title": item.job.job_title,
-            "company": item.job.company,
-            "city": item.job.city,
-            "job_type": item.job.job_type,
-            "total_score": item.total_score,
-            "skill_score": item.skill_score,
-            "project_score": item.project_score,
-            "keyword_score": item.keyword_score,
-            "recommendation": item.recommendation,
-            "quality_score": item.job.quality_score,
-            "quality_label": item.job.quality_label or "未评分",
-            "low_confidence": item.job.quality_label == "低",
-            "source_url": item.job.source_url,
-        }
-        for rank, item in enumerate(sorted_matches, start=1)
-    ]
+    rows: List[Dict[str, Any]] = []
+    for rank, item in enumerate(sorted_matches, start=1):
+        status, note = source_url_status(
+            item.job.source_url,
+            item.job.source_url_status,
+        )
+        note = item.job.source_url_note or note
+        display = (
+            "示例数据，无真实岗位链接"
+            if status == "demo_data"
+            else format_url_for_display(item.job.source_url)
+        )
+        rows.append(
+            {
+                "rank": rank,
+                "job_title": item.job.job_title,
+                "company": item.job.company,
+                "city": item.job.city,
+                "job_type": item.job.job_type,
+                "total_score": item.total_score,
+                "skill_score": item.skill_score,
+                "project_score": item.project_score,
+                "keyword_score": item.keyword_score,
+                "recommendation": item.recommendation,
+                "quality_score": item.job.quality_score,
+                "quality_label": item.job.quality_label or "未评分",
+                "low_confidence": item.job.quality_label == "低",
+                "source_url_display": display,
+                "source_url_status": status,
+                "source_url_note": note,
+                "source_access_status": item.job.source_access_status,
+                "source_access_note": item.job.source_access_note,
+                "source_url": (
+                    item.job.source_url
+                    if is_clickable_job_url(item.job.source_url, status)
+                    else ""
+                ),
+            }
+        )
+    return rows
 
 
 def build_analytics_summary_markdown(analytics: Dict[str, Any]) -> str:

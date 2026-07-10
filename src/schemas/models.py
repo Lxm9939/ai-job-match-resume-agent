@@ -104,6 +104,10 @@ class JobPosting(BaseModel):
     job_type: str = "岗位类型未知"
     jd_text: str
     source_url: str = ""
+    source_url_status: str = ""
+    source_url_note: str = ""
+    source_access_status: str = ""
+    source_access_note: str = ""
     publish_date: str = ""
     quality_score: int = 0
     quality_label: str = ""
@@ -167,10 +171,15 @@ class JobSource(BaseModel):
     source_id: str
     source_name: str
     source_type: str = "public_html"
-    base_url: str
-    list_url: str
-    allowed: bool = False
+    base_url: str = ""
+    list_url: str = ""
+    list_url_template: str = ""
+    enabled: bool = True
+    access_policy: str = "public_only"
+    allowed: bool = True
     notes: str = ""
+    source_access_status: str = "unknown"
+    source_access_note: str = ""
 
 
 class CrawledJob(BaseModel):
@@ -180,6 +189,10 @@ class CrawledJob(BaseModel):
     job_type: str = "岗位类型未知"
     jd_text: str
     source_url: str
+    source_url_status: str = ""
+    source_url_note: str = ""
+    source_access_status: str = ""
+    source_access_note: str = ""
     publish_date: str = ""
     crawled_at: str = ""
     source_name: str = ""
@@ -198,6 +211,9 @@ class CrawlResult(BaseModel):
     skipped_reason: str = ""
     error_message: str = ""
     crawled_count: int = 0
+    source_access_status: str = "unknown"
+    source_access_note: str = ""
+    entered_parser: bool = False
 
 
 class JobSearchPreference(BaseModel):

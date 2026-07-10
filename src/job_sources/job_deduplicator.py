@@ -7,6 +7,7 @@ from typing import List
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from src.schemas.models import CrawledJob, JobDeduplicationResult
+from src.url_utils import is_clickable_job_url
 
 
 class JobDeduplicator:
@@ -51,7 +52,7 @@ class JobDeduplicator:
         )
 
     def _dedupe_key(self, job: CrawledJob) -> str:
-        if job.source_url.strip():
+        if is_clickable_job_url(job.source_url, job.source_url_status):
             return f"url:{self._canonical_url(job.source_url)}"
         composite = "|".join(
             self._normalize(value)

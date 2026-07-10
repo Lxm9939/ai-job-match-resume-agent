@@ -18,8 +18,14 @@ from src.batch_workflow import BatchMatchWorkflow
 from src.config import get_settings
 from src.crawl_workflow import CrawlWorkflow
 from src.document_parser import parse_uploaded_file
+from src.job_sources.source_config import DEFAULT_SOURCE_CONFIG, load_job_sources
 from src.report_exporter import DOCX_MIME_TYPE, export_workflow_result_to_docx
 from src.schemas.models import BatchMatchResult, InterviewPrep, JobPreferences, JobSearchPreference
+from src.url_utils import (
+    format_url_for_display,
+    is_clickable_job_url,
+    source_url_status,
+)
 from src.workflow import ResumeMatchWorkflow
 
 
@@ -71,6 +77,22 @@ LOCATION_OPTIONS = [
     "远程",
     "海外",
     "其他",
+]
+DEFAULT_JOB_SOURCE_FALLBACK_OPTIONS = [
+    "Boss 直聘",
+    "智联招聘",
+    "猎聘",
+    "前程无忧",
+    "拉勾",
+    "实习僧",
+    "牛客招聘",
+    "应届生求职网",
+    "LinkedIn Jobs",
+    "Indeed",
+    "Seek",
+    "GradConnection",
+    "公司官网 Careers",
+    "自定义公开 URL",
 ]
 
 
@@ -164,6 +186,48 @@ def select_multiple_preferences(
         )
         values.extend(split_preference_values(custom))
     return values
+
+
+def get_default_job_source_options() -> List[str]:
+    try:
+        return [source.source_name for source in load_job_sources(path=DEFAULT_SOURCE_CONFIG)]
+    except Exception:
+        return DEFAULT_JOB_SOURCE_FALLBACK_OPTIONS
+
+
+def job_source_link_fields(job: Any) -> Dict[str, str]:
+    status, note = source_url_status(
+        getattr(job, "source_url", ""),
+        getattr(job, "source_url_status", ""),
+    )
+    note = getattr(job, "source_url_note", "") or note
+    raw_url = getattr(job, "source_url", "")
+    display = "示例数据，无真实岗位链接" if status == "demo_data" else format_url_for_display(raw_url)
+    return {
+        "source_url_display": display,
+        "source_url_status": status,
+        "source_url_note": note,
+        "source_access_status": getattr(job, "source_access_status", ""),
+        "source_access_note": getattr(job, "source_access_note", ""),
+        "source_url": raw_url if is_clickable_job_url(raw_url, status) else "",
+    }
+
+
+def render_job_source_link(job: Any) -> None:
+    fields = job_source_link_fields(job)
+    st.markdown("**来源链接**")
+    if fields["source_url"]:
+        st.markdown(f"[{fields['source_url_display']}]({fields['source_url']})")
+    else:
+        st.write(fields["source_url_display"] or "无真实链接")
+    st.caption(
+        f"链接状态：{fields['source_url_status'] or 'unknown'}；"
+        f"链接说明：{fields['source_url_note'] or '无'}"
+    )
+    access_status = fields.get("source_access_status")
+    access_note = fields.get("source_access_note")
+    if access_status or access_note:
+        st.caption(f"访问状态：{access_status or 'unknown'}；访问说明：{access_note or '无'}")
 
 
 def render_jd_analysis(jd: Any) -> None:
@@ -572,6 +636,7 @@ def render_batch_mode() -> None:
 
     ranking_rows = []
     for rank, item in enumerate(result.ranked_jobs, start=1):
+        link_fields = job_source_link_fields(item.job)
         ranking_rows.append(
             {
                 "排名": rank,
@@ -584,7 +649,12 @@ def render_batch_mode() -> None:
                 "项目经历分": item.project_score,
                 "关键词分": item.keyword_score,
                 "推荐结论": item.recommendation,
-                "来源链接": item.job.source_url,
+                "source_url_display": link_fields["source_url_display"],
+                "source_url_status": link_fields["source_url_status"],
+                "source_url_note": link_fields["source_url_note"],
+                "source_access_status": link_fields["source_access_status"],
+                "source_access_note": link_fields["source_access_note"],
+                "来源链接": link_fields["source_url"],
             }
         )
     st.dataframe(
@@ -617,7 +687,8 @@ def render_batch_mode() -> None:
         key="batch_selected_job",
     )
     selected = next(item for item in result.ranked_jobs if item.job.job_id == selected_job_id)
-    st.info(f"{selected.recommendation}。来源：{selected.job.source_url or '未提供'}")
+    st.info(f"{selected.recommendation}。")
+    render_job_source_link(selected.job)
     tabs = st.tabs(
         [
             "JD 解析结果",
@@ -651,10 +722,10 @@ def render_batch_mode() -> None:
 
 def render_crawl_mode() -> None:
     st.title("公开岗位源自动抓取")
-    st.caption("仅访问 robots.txt 允许、无需登录的公开 Careers 页面；抓取结果会进入 V2 批量匹配流程。")
-    st.warning(
-        "不支持 Boss 直聘、智联招聘、猎聘、前程无忧等登录或强反爬平台，"
-        "也不会使用验证码绕过、模拟登录、Cookie、代理池或浏览器指纹绕过。"
+    st.caption("尝试访问公开岗位页面，合规抓取结果会进入 V2 批量匹配流程。")
+    st.info(
+        "系统会尝试访问所选岗位来源的公开页面。若页面需要登录、验证码、访问受限或 "
+        "robots.txt 不允许，系统会自动跳过，并建议使用 CSV/Excel 导入或手动粘贴 JD。"
     )
 
     resume_col, preference_col = st.columns(2)
@@ -723,6 +794,21 @@ def render_crawl_mode() -> None:
         help="读取 examples/sample_crawled_jobs.json，不发起网络请求。",
         key="crawl_use_demo",
     )
+    default_source_options = get_default_job_source_options()
+    default_sources = st.multiselect(
+        "默认岗位来源",
+        default_source_options,
+        default=["公司官网 Careers", "自定义公开 URL"],
+        disabled=use_demo,
+        key="crawl_default_sources",
+    )
+    custom_urls_text = st.text_area(
+        "自定义公开岗位 URL",
+        height=120,
+        placeholder="每行一个公开岗位列表页或岗位详情页 URL",
+        disabled=use_demo,
+        key="crawl_custom_urls",
+    )
     source_col, default_col = st.columns(2)
     with source_col:
         source_config = st.file_uploader(
@@ -736,7 +822,7 @@ def render_crawl_mode() -> None:
             "使用默认示例配置",
             value=True,
             disabled=use_demo,
-            help="默认配置只包含 example.com 演示地址，请替换为真实且允许访问的公司 Careers URL。",
+            help="默认配置提供常见招聘平台与公司 Careers 来源选项；具体可抓取性由访问检查决定。",
             key="crawl_default_config",
         )
 
@@ -749,8 +835,34 @@ def render_crawl_mode() -> None:
         resume_text = collect_resume_text(uploaded_resume, pasted_resume)
         if resume_text is None:
             return
-        if not use_demo and source_config is None and not use_default_config:
-            st.error("请上传公开岗位源配置，或勾选使用默认示例配置。")
+        custom_urls = [
+            line.strip()
+            for line in custom_urls_text.splitlines()
+            if line.strip()
+        ]
+        custom_source_selected = "自定义公开 URL" in default_sources
+        selected_default_sources = (
+            [source for source in default_sources if source != "自定义公开 URL"]
+            if use_default_config
+            else []
+        )
+        if (
+            not use_demo
+            and source_config is None
+            and not selected_default_sources
+            and not custom_urls
+        ):
+            st.error("请选择默认岗位来源、上传公开岗位源配置，或粘贴自定义公开 URL。")
+            return
+        if not use_demo and custom_source_selected and not custom_urls:
+            st.warning("已选择“自定义公开 URL”，请粘贴至少一个公开 URL；本次将只处理其他已选来源。")
+        if not use_demo and not use_default_config and source_config is None and custom_urls:
+            selected_default_sources = []
+        if not use_demo and source_config is not None:
+            selected_default_sources = None
+
+        if not use_demo and not use_default_config and source_config is None and not custom_urls:
+            st.error("请上传公开岗位源配置，或粘贴自定义公开 URL。")
             return
 
         preference = JobSearchPreference(
@@ -769,6 +881,8 @@ def render_crawl_mode() -> None:
                     preference=preference,
                     use_demo=use_demo,
                     source_config_content=source_config.getvalue() if source_config else None,
+                    selected_source_names=selected_default_sources,
+                    custom_urls=custom_urls,
                 )
             except Exception as exc:
                 st.error(f"公开岗位流程未完成：{exc}")
@@ -803,6 +917,12 @@ def render_crawl_mode() -> None:
 
     source_rows = []
     for crawl_result in result.crawl_results:
+        source_url_display = format_url_for_display(crawl_result.source.list_url)
+        source_url = (
+            crawl_result.source.list_url
+            if is_clickable_job_url(crawl_result.source.list_url)
+            else ""
+        )
         if crawl_result.skipped_reason:
             status = "已跳过"
             detail = crawl_result.skipped_reason
@@ -818,7 +938,11 @@ def render_crawl_mode() -> None:
                 "状态": status,
                 "抓取数量": crawl_result.crawled_count,
                 "说明": detail,
-                "列表 URL": crawl_result.source.list_url,
+                "source URL": source_url,
+                "source_url_display": source_url_display,
+                "access_status": crawl_result.source_access_status,
+                "access_note": crawl_result.source_access_note,
+                "是否进入解析": "是" if crawl_result.entered_parser else "否",
             }
         )
     with st.expander("查看岗位源处理明细"):
@@ -826,29 +950,36 @@ def render_crawl_mode() -> None:
             pd.DataFrame(source_rows),
             use_container_width=True,
             hide_index=True,
-            column_config={"列表 URL": st.column_config.LinkColumn("列表 URL")},
+            column_config={"source URL": st.column_config.LinkColumn("source URL")},
         )
 
     st.markdown("### 抓取岗位预览")
-    preview_rows = [
-        {
-            "岗位名称": job.job_title,
-            "公司": job.company,
-            "城市": job.city,
-            "岗位类型": job.job_type,
-            "来源": job.source_name,
-            "来源链接": job.source_url,
-            "quality_score": job.quality_score,
-            "quality_label": (
-                "低（低置信度）" if job.quality_label == "低" else job.quality_label
-            ),
-            "quality_warnings": "；".join(job.quality_warnings),
-            "duplicate_group": job.duplicate_group,
-            "is_duplicate": job.is_duplicate,
-            "jd_length": job.jd_length,
-        }
-        for job in result.filter_result.filtered_jobs
-    ]
+    preview_rows = []
+    for job in result.filter_result.filtered_jobs:
+        link_fields = job_source_link_fields(job)
+        preview_rows.append(
+            {
+                "岗位名称": job.job_title,
+                "公司": job.company,
+                "城市": job.city,
+                "岗位类型": job.job_type,
+                "来源": job.source_name,
+                "source_url_display": link_fields["source_url_display"],
+                "source_url_status": link_fields["source_url_status"],
+                "source_url_note": link_fields["source_url_note"],
+                "source_access_status": link_fields["source_access_status"],
+                "source_access_note": link_fields["source_access_note"],
+                "来源链接": link_fields["source_url"],
+                "quality_score": job.quality_score,
+                "quality_label": (
+                    "低（低置信度）" if job.quality_label == "低" else job.quality_label
+                ),
+                "quality_warnings": "；".join(job.quality_warnings),
+                "duplicate_group": job.duplicate_group,
+                "is_duplicate": job.is_duplicate,
+                "jd_length": job.jd_length,
+            }
+        )
     st.dataframe(
         pd.DataFrame(preview_rows),
         use_container_width=True,
@@ -878,23 +1009,33 @@ def render_crawl_mode() -> None:
 
     batch_result = result.batch_result
     st.markdown("### 匹配排行榜")
-    ranking_rows = [
-        {
-            "排名": rank,
-            "岗位名称": item.job.job_title,
-            "公司": item.job.company,
-            "城市": item.job.city,
-            "匹配总分": item.total_score,
-            "推荐结论": item.recommendation,
-            "岗位质量标签": (
-                "低（低置信度）"
-                if item.job.quality_label == "低"
-                else item.job.quality_label
-            ),
-            "来源链接": item.job.source_url,
-        }
-        for rank, item in enumerate(batch_result.ranked_jobs, start=1)
-    ]
+    if not batch_result.ranked_jobs:
+        st.warning(batch_result.final_summary or "未形成可匹配岗位，请使用 CSV/Excel 导入或手动粘贴 JD。")
+        return
+    ranking_rows = []
+    for rank, item in enumerate(batch_result.ranked_jobs, start=1):
+        link_fields = job_source_link_fields(item.job)
+        ranking_rows.append(
+            {
+                "排名": rank,
+                "岗位名称": item.job.job_title,
+                "公司": item.job.company,
+                "城市": item.job.city,
+                "匹配总分": item.total_score,
+                "推荐结论": item.recommendation,
+                "岗位质量标签": (
+                    "低（低置信度）"
+                    if item.job.quality_label == "低"
+                    else item.job.quality_label
+                ),
+                "source_url_display": link_fields["source_url_display"],
+                "source_url_status": link_fields["source_url_status"],
+                "source_url_note": link_fields["source_url_note"],
+                "source_access_status": link_fields["source_access_status"],
+                "source_access_note": link_fields["source_access_note"],
+                "来源链接": link_fields["source_url"],
+            }
+        )
     st.dataframe(
         pd.DataFrame(ranking_rows),
         use_container_width=True,
@@ -920,7 +1061,8 @@ def render_crawl_mode() -> None:
     selected = next(
         item for item in batch_result.ranked_jobs if item.job.job_id == selected_job_id
     )
-    st.info(f"{selected.recommendation}。来源：{selected.job.source_url}")
+    st.info(f"{selected.recommendation}。")
+    render_job_source_link(selected.job)
     if selected.job.quality_label == "低":
         st.warning(
             "该岗位为低置信度抓取结果，请先核对来源页再使用分析结论。"

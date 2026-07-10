@@ -145,7 +145,7 @@ flowchart TD
 
 ### 数据来源边界
 
-V2 支持用户上传最新岗位 CSV / Excel，或手动粘贴多个 JD。V3 在此基础上增加合规的公司官网公开页面导入，但仍不访问 Boss 直聘、智联招聘、前程无忧等需要登录或可能受反爬限制的平台。
+V2 支持用户上传最新岗位 CSV / Excel，或手动粘贴多个 JD。V3 在此基础上增加公开岗位源导入，默认提供常见招聘平台和公司官网 Careers 作为来源选项。系统不会因为平台名称一刀切拒绝，但只会在页面公开可访问且 robots.txt 允许时进行轻量抓取；如果页面需要登录、验证码或访问受限，会跳过并记录原因。
 
 ## V3 公开岗位源抓取工作流
 
@@ -177,9 +177,9 @@ flowchart TD
 
 | 模块 | 输入 | 处理逻辑 | 输出 |
 | --- | --- | --- | --- |
-| Source Config | JSON 配置 | 校验 URL、来源类型和禁用平台域名 | `List[JobSource]` |
-| Robots Checker | 岗位列表 URL | 请求 robots.txt；拒绝或网络失败时安全跳过 | 允许状态与原因 |
-| Public Web Source | 公开静态 HTML 页面 | 带 User-Agent 和超时请求，解析岗位链接/文本并写入一小时缓存 | `List[CrawledJob]` |
+| Source Config | JSON 配置、默认来源选项、自定义公开 URL | 校验 source_type、public_only、URL 结构；不按域名黑名单禁用平台 | `List[JobSource]` |
+| Robots Checker | 岗位列表 URL | 请求 robots.txt；拒绝或网络失败时安全跳过 | `robots_disallowed` 或允许状态 |
+| Public Web Source | 公开静态 HTML 页面 | 判断 HTTP 状态、登录/验证码文本，补全相对链接，解析岗位链接/文本并写入一小时缓存 | `List[CrawledJob]` 或访问状态 |
 | Job Crawler Agent | 来源列表、最大岗位数 | 对来源逐一检查、至少间隔 1 秒访问，单个来源失败不影响其他来源 | `List[CrawlResult]` |
 | Job Quality Scorer | `List[CrawledJob]` | 按字段完整度、JD 长度、技能词和来源信息计算 0-100 分及 warning | 带质量字段的岗位列表 |
 | Job Deduplicator | 带质量字段的岗位列表 | 按 URL 或公司+岗位+城市分组，保留更完整且 JD 更长的版本 | `JobDeduplicationResult` |
@@ -188,13 +188,27 @@ flowchart TD
 
 ### 合规与稳定性边界
 
-- 仅处理无需登录的公司官网 Careers 页面或获准公开访问的静态 HTML。
-- 不支持 Boss 直聘、智联招聘、猎聘、前程无忧、拉勾等登录或强反爬平台。
-- 不使用验证码绕过、模拟登录、Cookie、代理池或浏览器指纹绕过。
-- robots.txt 不允许、无法检查或返回异常状态时，默认跳过。
+- 系统默认提供 Boss 直聘、智联招聘、猎聘、前程无忧、拉勾、实习僧、牛客招聘、应届生求职网、LinkedIn Jobs、Indeed、Seek、GradConnection、公司官网 Careers 和自定义公开 URL 作为来源选项。
+- 不因为平台名称一刀切拒绝；是否可抓取由 robots.txt、HTTP 状态、页面内容和解析结果决定。
+- 仅处理无需登录且公开可访问的静态 HTML 页面；如需登录、验证码或 robots.txt 不允许则跳过。
+- 不使用验证码绕过、模拟登录、Cookie 复用、代理池或浏览器指纹绕过。
+- robots.txt 不允许、无法检查或返回异常状态时，默认跳过并显示原因。
 - 页面请求设置超时、5 MB 响应上限、最大岗位数量、来源间隔和缓存。
-- 每条结果保留 `source_url`；过短岗位内容标记为“JD 信息不足”。
-- Demo 模式读取本地 JSON，不发起任何网络请求。
+- 每条结果保留 `source_url_status` 和 `source_url_note`；相对链接会被补全，无效链接会被标记而不是伪装成可点击链接。
+- Demo 模式读取本地 JSON，不发起任何网络请求，岗位链接显示为“示例数据，无真实岗位链接”。
+
+### V3 访问状态
+
+| 状态 | 含义 | 页面处理 |
+| --- | --- | --- |
+| `public_accessible` | robots 允许，HTTP 正常，页面内容可解析 | 进入岗位解析 |
+| `robots_disallowed` | robots.txt 不允许访问 | 跳过并显示 robots 原因 |
+| `login_required` | HTTP 401/403 或页面包含登录提示 | 跳过，建议导入或粘贴 JD |
+| `captcha_or_blocked` | HTTP 429 或页面包含验证码/安全检查提示 | 跳过，禁止绕过 |
+| `http_error` | 其他 HTTP 错误或响应过大 | 跳过 |
+| `parse_failed` | 页面公开但内容过短或未解析到岗位 | 显示解析失败原因 |
+| `no_public_url` | 默认来源未配置明确公开 URL | 提示用户粘贴具体公开 URL |
+| `demo_data` | 本地示例数据 | 不渲染真实岗位链接 |
 
 ### V3.1 质量与去重说明
 

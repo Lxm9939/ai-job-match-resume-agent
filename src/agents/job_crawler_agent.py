@@ -5,8 +5,9 @@ from __future__ import annotations
 import time
 from typing import List, Optional
 
-from src.job_sources.public_web_source import PublicWebSource
+from src.job_sources.public_web_source import JobSourceAccessError, PublicWebSource
 from src.job_sources.robots_checker import RobotsChecker
+from src.job_sources.source_config import resolve_source_list_url
 from src.schemas.models import CrawlResult, JobSearchPreference, JobSource
 
 
@@ -40,6 +41,8 @@ class JobCrawlerAgent:
                     CrawlResult(
                         source=source,
                         skipped_reason="已达到最大抓取岗位数量",
+                        source_access_status="unknown",
+                        source_access_note="已达到最大抓取岗位数量",
                     )
                 )
                 continue
@@ -48,6 +51,8 @@ class JobCrawlerAgent:
                     CrawlResult(
                         source=source,
                         skipped_reason=source.notes or "该岗位源未启用",
+                        source_access_status="unknown",
+                        source_access_note=source.notes or "该岗位源未启用",
                     )
                 )
                 continue
@@ -56,18 +61,39 @@ class JobCrawlerAgent:
                     CrawlResult(
                         source=source,
                         skipped_reason=f"当前不支持 source_type={source.source_type}",
+                        source_access_status="unknown",
+                        source_access_note=f"当前不支持 source_type={source.source_type}",
                     )
                 )
                 continue
 
+            list_url = resolve_source_list_url(source, preference)
+            if not list_url:
+                note = (
+                    "该来源未配置公开搜索 URL，请在自定义公开 URL 中提供具体页面，"
+                    "或使用 CSV/Excel 导入。"
+                )
+                results.append(
+                    CrawlResult(
+                        source=source,
+                        skipped_reason=note,
+                        source_access_status="no_public_url",
+                        source_access_note=note,
+                    )
+                )
+                continue
+            active_source = source.model_copy(update={"list_url": list_url})
+
             self._wait_for_rate_limit()
-            robots = self.robots_checker.check(source.list_url)
+            robots = self.robots_checker.check(active_source.list_url)
             self._last_source_request_at = time.monotonic()
             if not robots.allowed:
                 results.append(
                     CrawlResult(
-                        source=source,
+                        source=active_source,
                         skipped_reason=robots.reason,
+                        source_access_status="robots_disallowed",
+                        source_access_note=robots.reason,
                     )
                 )
                 continue
@@ -75,22 +101,38 @@ class JobCrawlerAgent:
             try:
                 self._wait_for_rate_limit()
                 remaining = max_jobs - collected_count
-                jobs = self.public_source.fetch(source, preference, remaining)
+                jobs = self.public_source.fetch(active_source, preference, remaining)
                 self._last_source_request_at = time.monotonic()
                 collected_count += len(jobs)
                 results.append(
                     CrawlResult(
-                        source=source,
+                        source=active_source,
                         jobs=jobs,
                         crawled_count=len(jobs),
+                        source_access_status="public_accessible",
+                        source_access_note="公开 HTML 可访问，已进入解析",
+                        entered_parser=True,
+                    )
+                )
+            except JobSourceAccessError as exc:
+                self._last_source_request_at = time.monotonic()
+                results.append(
+                    CrawlResult(
+                        source=active_source,
+                        skipped_reason=exc.access_note,
+                        source_access_status=exc.access_status,
+                        source_access_note=exc.access_note,
+                        entered_parser=exc.entered_parser,
                     )
                 )
             except Exception as exc:
                 self._last_source_request_at = time.monotonic()
                 results.append(
                     CrawlResult(
-                        source=source,
+                        source=active_source,
                         error_message=f"抓取失败，已跳过：{exc}",
+                        source_access_status="unknown",
+                        source_access_note=f"抓取失败，已跳过：{exc}",
                     )
                 )
         return results

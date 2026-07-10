@@ -59,6 +59,8 @@ def test_public_html_source_extracts_job_and_absolute_url(tmp_path: Path) -> Non
     assert len(jobs) == 1
     assert jobs[0].job_title == "AI 产品实习生"
     assert jobs[0].source_url == "https://company.example/careers/ai-product-intern"
+    assert jobs[0].source_url_status == "valid"
+    assert jobs[0].source_access_status == "public_accessible"
 
 
 def test_demo_crawl_enters_batch_matching_workflow() -> None:
@@ -83,7 +85,8 @@ def test_demo_crawl_enters_batch_matching_workflow() -> None:
     assert result.raw_jobs
     assert result.filter_result.filtered_jobs
     assert result.batch_result.ranked_jobs
-    assert all(item.job.source_url.startswith("https://") for item in result.batch_result.ranked_jobs)
+    assert all(item.job.source_url == "" for item in result.batch_result.ranked_jobs)
+    assert all(item.job.source_url_status == "demo_data" for item in result.batch_result.ranked_jobs)
     assert all(item.recommendation for item in result.batch_result.ranked_jobs)
     assert result.statistics.raw_job_count == len(result.raw_jobs)
     assert result.statistics.deduplicated_job_count == result.deduplication.output_count
