@@ -26,6 +26,7 @@ from src.url_utils import (
     is_clickable_job_url,
     source_url_status,
 )
+from src.utils.preference_utils import resolve_target_role, target_role_error_message
 from src.workflow import ResumeMatchWorkflow
 
 
@@ -55,6 +56,9 @@ TARGET_ROLE_OPTIONS = [
     "软件开发 / 测试",
     "其他",
 ]
+TARGET_ROLE_CUSTOM_PLACEHOLDER = (
+    "例如 用户增长分析师 / 数据运营 / 算法产品经理 / 安全分析师 / 海外市场分析"
+)
 JOB_TYPE_OPTIONS = [
     "实习",
     "可转正实习",
@@ -163,6 +167,22 @@ def select_single_preference(
         placeholder="请输入自定义内容",
     )
     return custom.strip() or "其他"
+
+
+def select_target_role(key: str, default: str = "AI 产品经理") -> tuple[str, str, str]:
+    st.caption("可以选择常用方向，也可以输入更具体的目标岗位。")
+    selected = st.selectbox(
+        "目标岗位方向",
+        TARGET_ROLE_OPTIONS,
+        index=TARGET_ROLE_OPTIONS.index(default),
+        key=key,
+    )
+    custom = st.text_input(
+        "自定义目标岗位方向",
+        key=f"{key}_custom",
+        placeholder=TARGET_ROLE_CUSTOM_PLACEHOLDER,
+    )
+    return resolve_target_role(selected, custom), selected, custom
 
 
 def select_multiple_preferences(
@@ -432,11 +452,8 @@ def render_single_mode() -> None:
             "single_candidate_type",
             "校招 / 应届",
         )
-        target_role = select_single_preference(
-            "目标岗位方向",
-            TARGET_ROLE_OPTIONS,
-            "single_target_role",
-            "AI 产品经理",
+        target_role, selected_target_role, custom_target_role = select_target_role(
+            "single_target_role"
         )
         jd_text = st.text_area(
             "粘贴岗位 JD",
@@ -451,6 +468,10 @@ def render_single_mode() -> None:
             return
         if not jd_text.strip():
             st.error("请粘贴岗位 JD。")
+            return
+        role_error = target_role_error_message(selected_target_role, custom_target_role)
+        if role_error:
+            st.error(role_error)
             return
 
         with st.spinner("Agent 工作流分析中..."):
@@ -546,11 +567,8 @@ def render_batch_mode() -> None:
             "batch_candidate_type",
             "校招 / 应届",
         )
-        target_role = select_single_preference(
-            "目标岗位方向",
-            TARGET_ROLE_OPTIONS,
-            "batch_target_role",
-            "AI 产品经理",
+        target_role, selected_target_role, custom_target_role = select_target_role(
+            "batch_target_role"
         )
         target_cities = select_multiple_preferences(
             "城市 / 地区偏好",
@@ -601,6 +619,10 @@ def render_batch_mode() -> None:
             return
         if not jobs:
             st.error("未识别到有效岗位，请检查文件中的 jd_text 字段或多 JD 分隔符。")
+            return
+        role_error = target_role_error_message(selected_target_role, custom_target_role)
+        if role_error:
+            st.error(role_error)
             return
 
         preferences = JobPreferences(
@@ -750,11 +772,8 @@ def render_crawl_mode() -> None:
             "crawl_candidate_type",
             "校招 / 应届",
         )
-        target_role = select_single_preference(
-            "目标岗位方向",
-            TARGET_ROLE_OPTIONS,
-            "crawl_target_role",
-            "AI 产品经理",
+        target_role, selected_target_role, custom_target_role = select_target_role(
+            "crawl_target_role"
         )
         target_cities = select_multiple_preferences(
             "城市 / 地区偏好",
@@ -834,6 +853,10 @@ def render_crawl_mode() -> None:
     ):
         resume_text = collect_resume_text(uploaded_resume, pasted_resume)
         if resume_text is None:
+            return
+        role_error = target_role_error_message(selected_target_role, custom_target_role)
+        if role_error:
+            st.error(role_error)
             return
         custom_urls = [
             line.strip()
