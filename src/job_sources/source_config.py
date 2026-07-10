@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import List, Optional
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import urlparse
 
+from src.job_sources.search_url_builder import SearchUrlBuildResult, build_search_url
 from src.schemas.models import JobSearchPreference
 from src.schemas.models import JobSource
 from src.url_utils import is_valid_http_url, normalize_url
@@ -66,26 +67,16 @@ def resolve_source_list_url(
 ) -> str:
     """Resolve a configured list URL or safe search URL template."""
 
-    if source.list_url.strip():
-        return normalize_url(source.list_url, source.base_url)
-    template = source.list_url_template.strip()
-    if not template:
-        return ""
+    return resolve_source_search_url(source, preference).url
 
-    preference = preference or JobSearchPreference()
-    keyword = preference.target_role or (preference.keywords[0] if preference.keywords else "")
-    city = preference.target_cities[0] if preference.target_cities else ""
-    values = {
-        "keyword": quote_plus(keyword),
-        "query": quote_plus(keyword),
-        "city": quote_plus(city),
-        "location": quote_plus(city),
-    }
-    try:
-        resolved = template.format(**values)
-    except KeyError:
-        return ""
-    return normalize_url(resolved, source.base_url)
+
+def resolve_source_search_url(
+    source: JobSource,
+    preference: Optional[JobSearchPreference] = None,
+) -> SearchUrlBuildResult:
+    """Resolve a source URL with an explanatory note for UI/status output."""
+
+    return build_search_url(source, preference or JobSearchPreference())
 
 
 def build_custom_url_sources(urls: List[str]) -> List[JobSource]:

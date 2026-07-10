@@ -4,7 +4,7 @@
     "source_name": "Boss 直聘",
     "source_type": "public_html",
     "base_url": "https://www.zhipin.com",
-    "list_url_template": "",
+    "list_url_template": "https://www.zhipin.com/web/geek/job?query={keyword}&city={city_code}",
     "enabled": true,
     "access_policy": "public_only",
     "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
@@ -24,7 +24,7 @@
     "source_name": "猎聘",
     "source_type": "public_html",
     "base_url": "https://www.liepin.com",
-    "list_url_template": "",
+    "list_url_template": "https://www.liepin.com/zhaopin/?key={keyword}&dqs={city_code}",
     "enabled": true,
     "access_policy": "public_only",
     "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
@@ -84,7 +84,7 @@
     "source_name": "LinkedIn Jobs",
     "source_type": "public_html",
     "base_url": "https://www.linkedin.com",
-    "list_url_template": "https://www.linkedin.com/jobs/search/?keywords={keyword}&location={city}",
+    "list_url_template": "https://www.linkedin.com/jobs/search/?keywords={keyword}&location={location}",
     "enabled": true,
     "access_policy": "public_only",
     "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
@@ -94,7 +94,7 @@
     "source_name": "Indeed",
     "source_type": "public_html",
     "base_url": "https://www.indeed.com",
-    "list_url_template": "https://www.indeed.com/jobs?q={keyword}&l={city}",
+    "list_url_template": "https://www.indeed.com/jobs?q={keyword}&l={location}",
     "enabled": true,
     "access_policy": "public_only",
     "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"
@@ -104,7 +104,7 @@
     "source_name": "Seek",
     "source_type": "public_html",
     "base_url": "https://www.seek.com.au",
-    "list_url_template": "",
+    "list_url_template": "https://www.seek.com.au/{keyword}-jobs/in-{location_slug}",
     "enabled": true,
     "access_policy": "public_only",
     "notes": "仅尝试公开可访问页面；如需登录、验证码或 robots 不允许则跳过。"

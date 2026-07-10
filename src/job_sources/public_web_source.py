@@ -7,7 +7,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -39,6 +39,46 @@ ROLE_TERMS = [
 ]
 LOGIN_REQUIRED_TERMS = ["请登录", "登录后查看", "login required", "sign in"]
 CAPTCHA_OR_BLOCKED_TERMS = ["验证码", "captcha", "security check", "verify", "访问过于频繁"]
+JOB_TEXT_TERMS = [
+    "岗位",
+    "职位",
+    "招聘",
+    "任职要求",
+    "岗位职责",
+    "工作职责",
+    "AI",
+    "数据分析",
+    "产品经理",
+    "商业分析",
+    "BI",
+    "SQL",
+    "Python",
+]
+CARD_SELECTORS = [
+    'a[href*="job"]',
+    'a[href*="jobs"]',
+    'a[href*="position"]',
+    'a[href*="career"]',
+    'a[href*="recruit"]',
+    'div[class*="job"]',
+    'li[class*="job"]',
+    'div[class*="position"]',
+    'li[class*="position"]',
+    'div[class*="career"]',
+]
+TITLE_KEYS = ("job_title", "jobTitle", "title", "name", "positionName", "position", "jobName")
+COMPANY_KEYS = ("company", "companyName", "employerName", "organization")
+CITY_KEYS = ("city", "location", "jobLocation", "workLocation")
+URL_KEYS = ("url", "jobUrl", "detailUrl", "applyUrl", "link", "href")
+DESCRIPTION_KEYS = (
+    "jd_text",
+    "description",
+    "jobDescription",
+    "responsibilities",
+    "requirements",
+    "summary",
+    "content",
+)
 
 
 class JobSourceAccessError(RuntimeError):
@@ -102,14 +142,25 @@ class PublicWebSource(BaseJobSource):
         if len(response.content) > 5_000_000:
             raise JobSourceAccessError("http_error", "页面超过 5 MB，已停止解析以避免过度下载。")
 
-        access_status, access_note = self._inspect_page(response.text)
+        html = response.text
+        access_status, access_note = self._inspect_page(html)
         if access_status != "public_accessible":
             raise JobSourceAccessError(access_status, access_note)
-        jobs = self._extract_jobs(response.text, source, preference, max_jobs)
+        jobs = self._extract_jobs(html, source, preference, max_jobs)
         if not jobs:
+            soup = BeautifulSoup(html or "", "html.parser")
+            if self._looks_like_dynamic_page(soup, html):
+                raise JobSourceAccessError(
+                    "parse_failed",
+                    (
+                        "页面可能由 JavaScript 动态渲染，当前静态解析器无法读取岗位内容。"
+                        "请改用 CSV/Excel 导入、手动粘贴 JD，或提供岗位详情页 URL。"
+                    ),
+                    entered_parser=True,
+                )
             raise JobSourceAccessError(
                 "parse_failed",
-                "页面公开可访问，但未解析到岗位卡片或岗位文本",
+                "页面公开可访问，但未发现岗位关键词或可解析的岗位结构。",
                 entered_parser=True,
             )
         self._write_cache(cache_path, jobs)
@@ -122,8 +173,6 @@ class PublicWebSource(BaseJobSource):
             return "login_required", "页面包含登录后查看提示"
         if any(term.lower() in lower for term in CAPTCHA_OR_BLOCKED_TERMS):
             return "captcha_or_blocked", "页面包含验证码或访问限制提示"
-        if len(text) < 40:
-            return "parse_failed", "页面内容过短，无法提取岗位"
         return "public_accessible", "公开 HTML 可访问，已进入解析"
 
     def _extract_jobs(
@@ -140,15 +189,212 @@ class PublicWebSource(BaseJobSource):
             + ROLE_TERMS
         )
         jobs: List[CrawledJob] = []
-        seen = set()
+        jobs.extend(self._extract_structured_jobs(soup, source, preference, max_jobs))
+        if jobs:
+            return jobs[:max_jobs]
+        jobs.extend(self._extract_card_jobs(soup, source, preference, search_terms, max_jobs))
+        if jobs:
+            return jobs[:max_jobs]
+        if not jobs:
+            jobs.extend(self._fallback_text_jobs(soup, source, preference, search_terms, max_jobs))
+        return jobs[:max_jobs]
 
-        for link in soup.find_all("a", href=True):
-            title = normalize_text(link.get_text(" ", strip=True))
-            context_node = self._job_context(link)
-            context = normalize_text(context_node.get_text(" ", strip=True))
-            if not self._looks_like_job(title, context, search_terms, link):
+    def _extract_structured_jobs(
+        self,
+        soup: BeautifulSoup,
+        source: JobSource,
+        preference: JobSearchPreference,
+        max_jobs: int,
+    ) -> List[CrawledJob]:
+        jobs: List[CrawledJob] = []
+        seen = set()
+        scripts = soup.find_all("script")
+        for script in scripts:
+            text = script.string or script.get_text(" ", strip=True)
+            if not text:
                 continue
-            href = str(link.get("href", ""))
+            script_type = (script.get("type") or "").lower()
+            script_id = (script.get("id") or "").lower()
+            lower = text.lower()
+            if (
+                script_type != "application/ld+json"
+                and script_id != "__next_data__"
+                and "__nuxt" not in lower
+                and not any(term in lower for term in ("job", "jobs", "position", "recruit"))
+            ):
+                continue
+            for payload in self._json_payloads(text):
+                for item in self._iter_job_dicts(payload):
+                    job = self._job_from_dict(item, source, preference)
+                    if job is None:
+                        continue
+                    key = (job.job_title.lower(), job.source_url.lower(), job.jd_text[:80])
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    jobs.append(job)
+                    if len(jobs) >= max_jobs:
+                        return jobs
+        return jobs
+
+    def _json_payloads(self, text: str) -> List[Any]:
+        payloads: List[Any] = []
+        raw = text.strip()
+        if len(raw) > 1_000_000:
+            return payloads
+        for candidate in dedupe_keep_order(
+            [
+                raw,
+                self._first_json_like(raw, "{", "}"),
+                self._first_json_like(raw, "[", "]"),
+            ]
+        ):
+            if not candidate:
+                continue
+            try:
+                payloads.append(json.loads(candidate))
+            except json.JSONDecodeError:
+                continue
+        return payloads
+
+    def _first_json_like(self, text: str, start: str, end: str) -> str:
+        start_index = text.find(start)
+        end_index = text.rfind(end)
+        if start_index == -1 or end_index == -1 or end_index <= start_index:
+            return ""
+        return text[start_index : end_index + 1]
+
+    def _iter_job_dicts(self, payload: Any) -> Iterable[dict[str, Any]]:
+        if isinstance(payload, dict):
+            if self._looks_like_job_dict(payload):
+                yield payload
+            for value in payload.values():
+                yield from self._iter_job_dicts(value)
+        elif isinstance(payload, list):
+            for item in payload:
+                yield from self._iter_job_dicts(item)
+
+    def _looks_like_job_dict(self, item: dict[str, Any]) -> bool:
+        keys = {str(key).lower() for key in item.keys()}
+        type_value = str(item.get("@type", "")).lower()
+        if "jobposting" in type_value:
+            return True
+        has_title = bool(keys & {key.lower() for key in TITLE_KEYS})
+        has_context = bool(
+            keys
+            & {
+                "description",
+                "jobdescription",
+                "responsibilities",
+                "requirements",
+                "url",
+                "joburl",
+                "company",
+                "companyname",
+                "joblocation",
+                "city",
+            }
+        )
+        return has_title and has_context
+
+    def _job_from_dict(
+        self,
+        item: dict[str, Any],
+        source: JobSource,
+        preference: JobSearchPreference,
+    ) -> Optional[CrawledJob]:
+        title = self._first_string(item, TITLE_KEYS)
+        if not title or len(title) > 120:
+            return None
+        company = self._first_string(item, COMPANY_KEYS) or self._nested_name(
+            item.get("hiringOrganization")
+        )
+        city = self._first_string(item, CITY_KEYS) or self._nested_name(item.get("jobLocation"))
+        description = self._first_string(item, DESCRIPTION_KEYS)
+        if not description:
+            description = self._join_string_values(item)
+        source_url = normalize_url(self._first_string(item, URL_KEYS), source.list_url or source.base_url)
+        status, note = source_url_status(source_url)
+        if not source_url and source.list_url:
+            source_url = source.list_url
+            status = "fallback"
+            note = "使用岗位列表页作为来源"
+        return self._build_job(
+            title,
+            description or title,
+            source_url,
+            source,
+            preference,
+            source_url_status_value=status,
+            source_url_note=note,
+            company=company,
+            city=city,
+            access_note="从结构化页面数据中解析岗位信息",
+        )
+
+    def _first_string(self, item: dict[str, Any], keys: Iterable[str]) -> str:
+        for key in keys:
+            if key not in item:
+                continue
+            value = item[key]
+            if isinstance(value, str):
+                return normalize_text(value)
+            if isinstance(value, dict):
+                nested = self._nested_name(value)
+                if nested:
+                    return nested
+            if isinstance(value, list):
+                text = " ".join(str(part) for part in value if isinstance(part, (str, int, float)))
+                if text.strip():
+                    return normalize_text(text)
+        return ""
+
+    def _nested_name(self, value: Any) -> str:
+        if isinstance(value, dict):
+            return self._first_string(value, ("name", "addressLocality", "city", "location"))
+        if isinstance(value, list):
+            for item in value:
+                nested = self._nested_name(item)
+                if nested:
+                    return nested
+        if isinstance(value, str):
+            return normalize_text(value)
+        return ""
+
+    def _join_string_values(self, item: dict[str, Any]) -> str:
+        values = [
+            normalize_text(value)
+            for value in item.values()
+            if isinstance(value, str) and len(value.strip()) >= 8
+        ]
+        return normalize_text(" ".join(values))[:2500]
+
+    def _extract_card_jobs(
+        self,
+        soup: BeautifulSoup,
+        source: JobSource,
+        preference: JobSearchPreference,
+        search_terms: List[str],
+        max_jobs: int,
+    ) -> List[CrawledJob]:
+        jobs: List[CrawledJob] = []
+        seen = set()
+        candidates: List[Tag] = []
+        for selector in CARD_SELECTORS:
+            candidates.extend(
+                item for item in soup.select(selector) if isinstance(item, Tag)
+            )
+        for link in soup.find_all("a", href=True):
+            if link not in candidates:
+                candidates.append(link)
+
+        for node in candidates:
+            title = self._node_title(node)
+            context_node = self._job_context(node)
+            context = normalize_text(context_node.get_text(" ", strip=True))
+            if not self._looks_like_job(title, context, search_terms, node):
+                continue
+            href = self._node_href(node)
             source_url = normalize_url(href, source.list_url or source.base_url)
             status, note = source_url_status(source_url)
             if not source_url and source.list_url:
@@ -172,10 +418,21 @@ class PublicWebSource(BaseJobSource):
             )
             if len(jobs) >= max_jobs:
                 break
+        return jobs
 
-        if not jobs:
-            jobs.extend(self._fallback_text_jobs(soup, source, preference, search_terms, max_jobs))
-        return jobs[:max_jobs]
+    def _node_title(self, node: Tag) -> str:
+        if node.name == "a":
+            return normalize_text(node.get_text(" ", strip=True))
+        title_node = node.find(["h1", "h2", "h3", "h4", "strong", "a"])
+        if title_node:
+            return normalize_text(title_node.get_text(" ", strip=True))
+        return normalize_text(node.get_text(" ", strip=True))[:80]
+
+    def _node_href(self, node: Tag) -> str:
+        if node.name == "a":
+            return str(node.get("href", ""))
+        link = node.find("a", href=True)
+        return str(link.get("href", "")) if isinstance(link, Tag) else ""
 
     def _job_context(self, link: Tag) -> Tag:
         return (
@@ -201,7 +458,11 @@ class PublicWebSource(BaseJobSource):
         class_text = " ".join(link.get("class", []))
         parent_class = " ".join((link.parent.get("class", []) if isinstance(link.parent, Tag) else []))
         has_job_class = "job" in f"{class_text} {parent_class}".lower()
-        return has_job_class or self._contains_term(title, terms) or (
+        has_position_class = any(
+            term in f"{class_text} {parent_class}".lower()
+            for term in ("position", "career", "recruit")
+        )
+        return has_job_class or has_position_class or self._contains_term(title, terms) or (
             len(context) >= 40 and self._contains_term(context, terms)
         )
 
@@ -241,12 +502,55 @@ class PublicWebSource(BaseJobSource):
                     source,
                     preference,
                     source_url_status_value="fallback",
-                    source_url_note="使用岗位列表页作为来源",
+                    source_url_note="从岗位列表页文本中提取，未找到独立岗位详情链接",
+                    access_note="页面公开可访问，但岗位结构为低置信度解析",
                 )
             )
             if len(jobs) >= max_jobs:
                 break
+        if jobs:
+            return jobs
+
+        page_text = soup.get_text("\n", strip=True)
+        chunks = self._text_job_chunks(page_text, terms)
+        for chunk in chunks[:max_jobs]:
+            title = chunk.split("\n", 1)[0][:80]
+            jobs.append(
+                self._build_job(
+                    title,
+                    normalize_text(chunk),
+                    source.list_url,
+                    source,
+                    preference,
+                    source_url_status_value="fallback",
+                    source_url_note="从岗位列表页文本中提取，未找到独立岗位详情链接",
+                    access_note="页面公开可访问，但岗位结构为低置信度解析",
+                )
+            )
         return jobs
+
+    def _text_job_chunks(self, text: str, terms: List[str]) -> List[str]:
+        lines = [normalize_text(line) for line in text.splitlines() if normalize_text(line)]
+        chunks: List[str] = []
+        for index, line in enumerate(lines):
+            if not self._contains_term(line, terms + JOB_TEXT_TERMS):
+                continue
+            window = lines[index : index + 6]
+            chunk = "\n".join(window)
+            if len(chunk) >= 40:
+                chunks.append(chunk[:2500])
+        return dedupe_keep_order(chunks)
+
+    def _looks_like_dynamic_page(self, soup: BeautifulSoup, html: str) -> bool:
+        text = normalize_text(soup.get_text(" ", strip=True))
+        lower_html = html.lower()
+        if any(term in lower_html for term in ("enable javascript", "请开启 javascript", "请开启javascript")):
+            return True
+        has_app_root = bool(soup.find(id="root") or soup.find(id="app"))
+        scripts = soup.find_all("script", src=True)
+        next_data = soup.find(id="__NEXT_DATA__")
+        next_empty = isinstance(next_data, Tag) and not normalize_text(next_data.get_text(" ", strip=True))
+        return (has_app_root and len(text) < 120) or (len(scripts) >= 5 and len(text) < 120) or next_empty
 
     def _build_job(
         self,
@@ -258,6 +562,10 @@ class PublicWebSource(BaseJobSource):
         *,
         source_url_status_value: str = "",
         source_url_note: str = "",
+        company: str = "",
+        city: str = "",
+        job_type: str = "",
+        access_note: str = "公开 HTML 可访问，已进入解析",
     ) -> CrawledJob:
         jd_text = context[:2500] or title
         quality = "正常"
@@ -267,15 +575,15 @@ class PublicWebSource(BaseJobSource):
         status, inferred_note = source_url_status(source_url, source_url_status_value)
         return CrawledJob(
             job_title=title,
-            company=self._company_name(source.source_name),
-            city=self._detect_city(context, preference.target_cities),
-            job_type=self._detect_job_type(context),
+            company=company or self._company_name(source.source_name),
+            city=city or self._detect_city(context, preference.target_cities),
+            job_type=job_type or self._detect_job_type(context),
             jd_text=jd_text,
             source_url=source_url,
             source_url_status=status,
             source_url_note=source_url_note or inferred_note,
             source_access_status="public_accessible",
-            source_access_note="公开 HTML 可访问，已进入解析",
+            source_access_note=access_note,
             publish_date=self._detect_date(context),
             crawled_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             source_name=source.source_name,

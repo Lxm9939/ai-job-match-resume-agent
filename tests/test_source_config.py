@@ -30,6 +30,13 @@ def test_default_platforms_are_not_rejected_by_domain() -> None:
     assert all(source.allowed for source in selected)
 
 
+def test_default_config_has_auto_search_templates_for_supported_sources() -> None:
+    sources = {source.source_name: source for source in load_job_sources(path=DEFAULT_SOURCE_CONFIG)}
+
+    for name in ["Boss 直聘", "猎聘", "LinkedIn Jobs", "Indeed", "Seek"]:
+        assert sources[name].list_url_template
+
+
 def test_resolve_source_list_url_formats_public_template() -> None:
     source = JobSource(
         source_id="indeed",

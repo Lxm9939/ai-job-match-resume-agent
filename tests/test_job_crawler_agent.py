@@ -83,7 +83,19 @@ def test_no_public_url_is_reported() -> None:
     )[0]
 
     assert result.source_access_status == "no_public_url"
-    assert "未配置公开搜索 URL" in result.source_access_note
+    assert "未配置稳定公开搜索 URL" in result.source_access_note
+
+
+def test_source_without_template_produces_single_no_public_url_result() -> None:
+    agent = JobCrawlerAgent(robots_checker=FakeRobotsChecker())
+
+    results = agent.run(
+        [JobSource(source_id="zhaopin", source_name="智联招聘", base_url="https://www.zhaopin.com")],
+        JobSearchPreference(target_role="AI 产品经理", target_cities=["北京", "上海"], max_jobs=3),
+    )
+
+    assert len(results) == 1
+    assert results[0].source_access_status == "no_public_url"
 
 
 def test_http_statuses_are_mapped_to_access_status(tmp_path: Path) -> None:

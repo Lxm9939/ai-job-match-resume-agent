@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from src.job_sources.public_web_source import JobSourceAccessError, PublicWebSource
 from src.job_sources.robots_checker import RobotsChecker
-from src.job_sources.source_config import resolve_source_list_url
+from src.job_sources.source_config import resolve_source_search_url
 from src.schemas.models import CrawlResult, JobSearchPreference, JobSource
 
 
@@ -67,11 +67,12 @@ class JobCrawlerAgent:
                 )
                 continue
 
-            list_url = resolve_source_list_url(source, preference)
+            url_result = resolve_source_search_url(source, preference)
+            list_url = url_result.url
             if not list_url:
-                note = (
-                    "该来源未配置公开搜索 URL，请在自定义公开 URL 中提供具体页面，"
-                    "或使用 CSV/Excel 导入。"
+                note = url_result.note or (
+                    "该来源未配置稳定公开搜索 URL，请在“自定义公开 URL”中提供具体页面，"
+                    "或使用 CSV/Excel/JD 文本导入。"
                 )
                 results.append(
                     CrawlResult(
@@ -82,7 +83,13 @@ class JobCrawlerAgent:
                     )
                 )
                 continue
-            active_source = source.model_copy(update={"list_url": list_url})
+            active_source = source.model_copy(
+                update={
+                    "list_url": list_url,
+                    "source_access_status": "unknown",
+                    "source_access_note": url_result.note,
+                }
+            )
 
             self._wait_for_rate_limit()
             robots = self.robots_checker.check(active_source.list_url)
@@ -104,13 +111,18 @@ class JobCrawlerAgent:
                 jobs = self.public_source.fetch(active_source, preference, remaining)
                 self._last_source_request_at = time.monotonic()
                 collected_count += len(jobs)
+                success_note = "；".join(
+                    part
+                    for part in [url_result.note, "公开 HTML 可访问，已进入解析"]
+                    if part
+                )
                 results.append(
                     CrawlResult(
                         source=active_source,
                         jobs=jobs,
                         crawled_count=len(jobs),
                         source_access_status="public_accessible",
-                        source_access_note="公开 HTML 可访问，已进入解析",
+                        source_access_note=success_note,
                         entered_parser=True,
                     )
                 )

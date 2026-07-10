@@ -209,10 +209,34 @@ def select_multiple_preferences(
 
 
 def get_default_job_source_options() -> List[str]:
+    sources = get_default_job_sources()
+    if sources:
+        return [source.source_name for source in sources]
+    return DEFAULT_JOB_SOURCE_FALLBACK_OPTIONS
+
+
+def get_default_job_sources() -> List[Any]:
     try:
-        return [source.source_name for source in load_job_sources(path=DEFAULT_SOURCE_CONFIG)]
+        return load_job_sources(path=DEFAULT_SOURCE_CONFIG)
     except Exception:
-        return DEFAULT_JOB_SOURCE_FALLBACK_OPTIONS
+        return []
+
+
+def default_source_generation_summary() -> tuple[List[str], List[str]]:
+    sources = get_default_job_sources()
+    auto = [
+        source.source_name
+        for source in sources
+        if source.list_url.strip() or source.list_url_template.strip()
+    ]
+    manual = [
+        source.source_name
+        for source in sources
+        if not source.list_url.strip()
+        and not source.list_url_template.strip()
+        and source.source_name != "自定义公开 URL"
+    ]
+    return auto, manual
 
 
 def job_source_link_fields(job: Any) -> Dict[str, str]:
@@ -746,8 +770,8 @@ def render_crawl_mode() -> None:
     st.title("公开岗位源自动抓取")
     st.caption("尝试访问公开岗位页面，合规抓取结果会进入 V2 批量匹配流程。")
     st.info(
-        "系统会尝试访问所选岗位来源的公开页面。若页面需要登录、验证码、访问受限或 "
-        "robots.txt 不允许，系统会自动跳过，并建议使用 CSV/Excel 导入或手动粘贴 JD。"
+        "部分平台可根据关键词和城市自动生成公开搜索页；部分平台需要用户手动提供具体公开搜索结果页 URL。"
+        "系统只访问公开页面，不进行登录、验证码、Cookie、代理池或反爬绕过。"
     )
 
     resume_col, preference_col = st.columns(2)
@@ -814,6 +838,7 @@ def render_crawl_mode() -> None:
         key="crawl_use_demo",
     )
     default_source_options = get_default_job_source_options()
+    auto_sources, manual_sources = default_source_generation_summary()
     default_sources = st.multiselect(
         "默认岗位来源",
         default_source_options,
@@ -821,6 +846,13 @@ def render_crawl_mode() -> None:
         disabled=use_demo,
         key="crawl_default_sources",
     )
+    if auto_sources:
+        st.caption(f"可自动生成搜索 URL：{'、'.join(auto_sources)}")
+    if manual_sources:
+        st.caption(
+            f"需要提供具体公开 URL：{'、'.join(manual_sources)}。"
+            "这些来源不会自动猜测不稳定搜索地址。"
+        )
     custom_urls_text = st.text_area(
         "自定义公开岗位 URL",
         height=120,
@@ -961,10 +993,12 @@ def render_crawl_mode() -> None:
                 "状态": status,
                 "抓取数量": crawl_result.crawled_count,
                 "说明": detail,
-                "source URL": source_url,
+                "generated_url / custom_url": source_url,
                 "source_url_display": source_url_display,
                 "access_status": crawl_result.source_access_status,
                 "access_note": crawl_result.source_access_note,
+                "parsed_job_count": crawl_result.crawled_count,
+                "skipped_reason": crawl_result.skipped_reason,
                 "是否进入解析": "是" if crawl_result.entered_parser else "否",
             }
         )
@@ -973,7 +1007,11 @@ def render_crawl_mode() -> None:
             pd.DataFrame(source_rows),
             use_container_width=True,
             hide_index=True,
-            column_config={"source URL": st.column_config.LinkColumn("source URL")},
+            column_config={
+                "generated_url / custom_url": st.column_config.LinkColumn(
+                    "generated_url / custom_url"
+                )
+            },
         )
 
     st.markdown("### 抓取岗位预览")
